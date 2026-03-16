@@ -4,60 +4,49 @@ import { ParticleCanvas } from "../components/ParticleCanvas";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
+import { useLocalAuth } from "../contexts/LocalAuthContext";
 import { useActor } from "../hooks/useActor";
-import { useInternetIdentity } from "../hooks/useInternetIdentity";
 
-interface AuthPageProps {
-  defaultTab?: "login" | "register";
-  sessionExpired?: boolean;
-}
+const PASSKEY = "3275";
 
-export function AuthPage({
-  defaultTab = "login",
-  sessionExpired = false,
-}: AuthPageProps) {
-  const { login, isLoggingIn, identity } = useInternetIdentity();
+export function AuthPage() {
+  const { setAuth } = useLocalAuth();
   const { actor } = useActor();
-  const [tab, setTab] = useState<"login" | "register">(defaultTab);
   const [name, setName] = useState("");
-  const [inviteCode, setInviteCode] = useState("");
+  const [passkey, setPasskey] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
 
-  const handleRegister = async () => {
+  const handleLogin = async () => {
     if (!actor) {
-      setError("Please sign in with Internet Identity first.");
+      setError("App is loading, please try again.");
       return;
     }
     if (!name.trim()) {
       setError("Please enter your name.");
       return;
     }
-    if (!inviteCode.trim()) {
-      setError("Please enter the invite code.");
+    if (passkey !== PASSKEY) {
+      setError("Wrong passkey. Please try again.");
       return;
     }
     setError("");
     setLoading(true);
     try {
-      await actor.registerWithInviteCode(inviteCode.trim(), {
-        name: name.trim(),
-      });
+      let sessionId = localStorage.getItem("tv_session_id");
+      if (!sessionId) {
+        sessionId = crypto.randomUUID();
+      }
+      await actor.registerUser(sessionId, name.trim(), passkey);
       setSuccess(true);
-      // Reload to re-check registration
-      setTimeout(() => window.location.reload(), 1200);
+      setAuth(sessionId, name.trim());
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Registration failed.";
-      // Make common backend error messages friendlier
-      if (msg.includes("Invalid invite code") || msg.includes("invite")) {
-        setError(
-          "That invite code isn't valid. Please double-check and try again.",
-        );
-      } else if (msg.includes("already registered")) {
-        setError("This account is already registered. Try signing in.");
-      } else if (msg.includes("full") || msg.includes("limit")) {
+      const msg = e instanceof Error ? e.message : "Login failed.";
+      if (msg.includes("full") || msg.includes("max")) {
         setError("This TwoVerse is full — only 3 members allowed.");
+      } else if (msg.includes("passkey") || msg.includes("Wrong")) {
+        setError("Wrong passkey. Please try again.");
       } else {
         setError(msg);
       }
@@ -82,138 +71,65 @@ export function AuthPage({
           </p>
         </div>
 
-        {sessionExpired && (
-          <div className="mb-4 px-4 py-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-700 text-sm text-center">
-            Your session data was reset. Please re-join with your invite code to
-            restore access.
-          </div>
-        )}
-
         <div className="bg-white rounded-2xl shadow-sm border border-pink-100 p-6">
-          <div className="flex rounded-xl bg-pink-50 p-1 mb-6">
-            <button
-              type="button"
-              data-ocid="auth.login.tab"
-              onClick={() => {
-                setTab("login");
-                setError("");
-              }}
-              className={`flex-1 py-1.5 text-sm font-medium rounded-lg transition-all duration-200 ${
-                tab === "login"
-                  ? "bg-white text-pink-500 shadow-sm"
-                  : "text-gray-400"
-              }`}
-            >
-              Sign In
-            </button>
-            <button
-              type="button"
-              data-ocid="auth.register.tab"
-              onClick={() => {
-                setTab("register");
-                setError("");
-              }}
-              className={`flex-1 py-1.5 text-sm font-medium rounded-lg transition-all duration-200 ${
-                tab === "register"
-                  ? "bg-white text-pink-500 shadow-sm"
-                  : "text-gray-400"
-              }`}
-            >
-              Join
-            </button>
-          </div>
-
-          {tab === "login" ? (
-            <div className="space-y-4">
-              <p className="text-sm text-gray-500 text-center">
-                Sign in with your Internet Identity to continue.
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="auth-name" className="text-xs text-gray-500">
+                Your Name
+              </Label>
+              <Input
+                id="auth-name"
+                data-ocid="auth.name_input"
+                placeholder="e.g. Yuva"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleLogin()}
+                className="mt-1 rounded-xl border-pink-200"
+                autoComplete="off"
+              />
+            </div>
+            <div>
+              <Label htmlFor="auth-passkey" className="text-xs text-gray-500">
+                Passkey
+              </Label>
+              <Input
+                id="auth-passkey"
+                data-ocid="auth.passkey_input"
+                type="password"
+                placeholder="Enter passkey"
+                value={passkey}
+                onChange={(e) => setPasskey(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleLogin()}
+                className="mt-1 rounded-xl border-pink-200"
+                autoComplete="off"
+              />
+            </div>
+            {error && (
+              <p data-ocid="auth.error_state" className="text-xs text-red-500">
+                {error}
               </p>
-              <Button
-                data-ocid="auth.login_button"
-                onClick={login}
-                disabled={isLoggingIn}
-                className="w-full bg-pink-400 hover:bg-pink-500 text-white rounded-xl"
+            )}
+            {success && (
+              <p
+                data-ocid="auth.success_state"
+                className="text-xs text-green-600 text-center"
               >
-                {isLoggingIn
-                  ? "Signing in..."
-                  : "Sign in with Internet Identity"}
-              </Button>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {!identity && (
-                <div className="rounded-xl bg-pink-50 border border-pink-100 px-3 py-2 text-xs text-pink-600 text-center">
-                  Sign in with Internet Identity first, then fill in your
-                  details below.
-                </div>
-              )}
-              <div>
-                <Label htmlFor="reg-name" className="text-xs text-gray-500">
-                  Your Name
-                </Label>
-                <Input
-                  id="reg-name"
-                  data-ocid="auth.name_input"
-                  placeholder="e.g. Alex"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="mt-1 rounded-xl border-pink-200"
-                />
-              </div>
-              <div>
-                <Label htmlFor="invite" className="text-xs text-gray-500">
-                  Invite Code
-                </Label>
-                <Input
-                  id="invite"
-                  data-ocid="auth.invite_code_input"
-                  placeholder="Enter invite code"
-                  value={inviteCode}
-                  onChange={(e) => setInviteCode(e.target.value)}
-                  className="mt-1 rounded-xl border-pink-200"
-                />
-              </div>
-              {error && (
-                <p
-                  data-ocid="auth.error_state"
-                  className="text-xs text-red-500"
-                >
-                  {error}
-                </p>
-              )}
-              {success && (
-                <p
-                  data-ocid="auth.success_state"
-                  className="text-xs text-green-600 text-center"
-                >
-                  ✓ Joined! Loading your world…
-                </p>
-              )}
-              <Button
-                data-ocid="auth.register_button"
-                onClick={handleRegister}
-                disabled={loading || success}
-                className="w-full bg-pink-400 hover:bg-pink-500 text-white rounded-xl"
-              >
-                {loading
-                  ? "Joining..."
-                  : success
-                    ? "Welcome! ✨"
-                    : "Join TwoVerse"}
-              </Button>
-              {!identity && (
-                <Button
-                  variant="ghost"
-                  data-ocid="auth.identity_button"
-                  onClick={login}
-                  disabled={isLoggingIn}
-                  className="w-full text-pink-400 hover:text-pink-500"
-                >
-                  {isLoggingIn ? "Opening..." : "Open Internet Identity"}
-                </Button>
-              )}
-            </div>
-          )}
+                Welcome! Loading your world...
+              </p>
+            )}
+            <Button
+              data-ocid="auth.login_button"
+              onClick={handleLogin}
+              disabled={loading || success}
+              className="w-full bg-pink-400 hover:bg-pink-500 text-white rounded-xl"
+            >
+              {loading
+                ? "Entering..."
+                : success
+                  ? "Welcome! "
+                  : "Enter TwoVerse"}
+            </Button>
+          </div>
         </div>
       </div>
     </div>

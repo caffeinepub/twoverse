@@ -1,8 +1,9 @@
 import { useNavigate } from "@tanstack/react-router";
 import { Heart, Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
-import type { Emotion } from "../backend.d";
+import type { T__1 as CheckIn } from "../backend.d";
 import { Button } from "../components/ui/button";
+import { useLocalAuth } from "../contexts/LocalAuthContext";
 import { useActor } from "../hooks/useActor";
 import {
   computeDaysTogether,
@@ -22,44 +23,38 @@ const emotionEmoji: Record<string, string> = {
 
 export function DashboardPage() {
   const { actor } = useActor();
+  const { sessionId, name: userName } = useLocalAuth();
   const navigate = useNavigate();
   const [days, setDays] = useState(0);
   const [startDate, setStartDate] = useState("");
   const [prompt, setPrompt] = useState("");
-  const [checkIns, setCheckIns] = useState<
-    { emotion: Emotion; date: string }[]
-  >([]);
-  const [userName, setUserName] = useState("");
+  const [checkIns, setCheckIns] = useState<CheckIn[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!actor) return;
+    if (!actor || !sessionId) return;
     const load = async () => {
       try {
-        const [sd, dailyPrompt, todayCheckIns, profile] = await Promise.all([
+        const [sd, dailyPrompt, todayCheckIns] = await Promise.all([
           actor.getStartDate(),
           actor.getDailyPrompt(getDayOfYear(new Date())),
           actor.getTodayCheckIns(todayStr()),
-          actor.getCallerUserProfile(),
         ]);
         setStartDate(sd);
         setDays(computeDaysTogether(sd));
         setPrompt(dailyPrompt);
         setCheckIns(todayCheckIns);
-        if (profile) setUserName(profile.name);
       } finally {
         setLoading(false);
       }
     };
     load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [actor]);
+  }, [actor, sessionId]);
 
   const nextAnniv = getNextAnniversary(startDate);
 
   return (
     <div className="flex flex-col gap-4 py-5 px-4 max-w-lg mx-auto">
-      {/* Greeting */}
       {userName && (
         <div className="text-center">
           <p className="text-muted-foreground text-sm">
@@ -70,7 +65,6 @@ export function DashboardPage() {
         </div>
       )}
 
-      {/* Days Together */}
       <div
         data-ocid="dashboard.days_together"
         className="bg-gradient-to-br from-pink-50 via-rose-50 to-pink-100/60 rounded-3xl p-7 text-center shadow-soft border border-pink-100"
@@ -98,7 +92,6 @@ export function DashboardPage() {
         )}
       </div>
 
-      {/* Next Anniversary */}
       {nextAnniv && (
         <div className="bg-white rounded-2xl p-4 shadow-soft border border-pink-100 flex items-center gap-3">
           <div className="text-2xl">🗓</div>
@@ -117,7 +110,6 @@ export function DashboardPage() {
         </div>
       )}
 
-      {/* Today's Prompt */}
       <div
         data-ocid="dashboard.prompt_teaser"
         className="bg-white rounded-2xl p-5 shadow-soft border border-pink-100"
@@ -135,7 +127,6 @@ export function DashboardPage() {
         </p>
       </div>
 
-      {/* Today's Check-ins */}
       <div className="bg-white rounded-2xl p-5 shadow-soft border border-pink-100">
         <div className="text-xs font-semibold text-pink-400 uppercase tracking-widest mb-3">
           Group Vibes Today

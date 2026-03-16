@@ -90,13 +90,13 @@ export class ExternalBlob {
     }
 }
 export interface Reaction {
-    userId: Uint8Array;
+    sessionId: string;
     emoji: string;
 }
 export interface T__2 {
     id: Id;
     title: string;
-    authorId: Uint8Array;
+    authorId: string;
     authorName: string;
     description?: string;
     timestamp: bigint;
@@ -107,12 +107,12 @@ export interface _CaffeineStorageRefillInformation {
 }
 export interface T__1 {
     emotion: Emotion;
-    userId: Uint8Array;
+    sessionId: string;
     date: string;
 }
 export interface T {
     id: bigint;
-    authorId: Uint8Array;
+    authorId: string;
     text: string;
     authorName: string;
     timestamp: bigint;
@@ -150,440 +150,131 @@ export interface backendInterface {
     _caffeineStorageCreateCertificate(blobHash: string): Promise<_CaffeineStorageCreateCertificateResult>;
     _caffeineStorageRefillCashier(refillInformation: _CaffeineStorageRefillInformation | null): Promise<_CaffeineStorageRefillResult>;
     _caffeineStorageUpdateGatewayPrincipals(): Promise<void>;
-    _initializeAccessControlWithSecret(userSecret: string): Promise<void>;
-    addReaction(messageId: bigint, emoji: string): Promise<void>;
-    assignCallerUserRole(user: Principal, role: UserRole): Promise<void>;
-    createMemory(authorName: string, title: string, description: string | null, blobId: string | null): Promise<T__2>;
-    deleteMemory(memoryId: bigint): Promise<void>;
-    getBlobLink(blobId: string): Promise<string | null>;
-    getCallerUserProfile(): Promise<UserProfile | null>;
-    getCallerUserRole(): Promise<UserRole>;
-    getDailyPrompt(dayOfYear: bigint): Promise<string>;
-    getMemories(): Promise<Array<T__2>>;
-    getMessages(): Promise<Array<T>>;
+    registerUser(sessionId: string, name: string, passkey: string): Promise<void>;
+    getProfile(sessionId: string): Promise<UserProfile | null>;
+    saveProfile(sessionId: string, profile: UserProfile): Promise<void>;
     getStartDate(): Promise<string>;
+    updateStartDate(sessionId: string, date: string): Promise<void>;
+    submitCheckIn(sessionId: string, date: string, emotion: Emotion): Promise<void>;
     getTodayCheckIns(date: string): Promise<Array<T__1>>;
-    getUserCheckIn(date: string): Promise<T__1 | null>;
-    getUserProfile(user: Principal): Promise<UserProfile | null>;
-    isCallerAdmin(): Promise<boolean>;
-    registerWithInviteCode(code: string, profile: UserProfile): Promise<void>;
-    removeReaction(messageId: bigint, emoji: string): Promise<void>;
-    saveCallerUserProfile(profile: UserProfile): Promise<void>;
-    sendMessage(authorName: string, text: string): Promise<T>;
-    submitCheckIn(date: string, emotion: Emotion): Promise<void>;
-    updateInviteCode(newCode: string): Promise<void>;
-    updateStartDate(newDate: string): Promise<void>;
+    getUserCheckIn(sessionId: string, date: string): Promise<T__1 | null>;
+    getDailyPrompt(dayOfYear: bigint): Promise<string>;
+    sendMessage(sessionId: string, authorName: string, text: string): Promise<T>;
+    addReaction(sessionId: string, messageId: bigint, emoji: string): Promise<void>;
+    removeReaction(sessionId: string, messageId: bigint, emoji: string): Promise<void>;
+    getMessages(): Promise<Array<T>>;
+    createMemory(sessionId: string, authorName: string, title: string, description: string | null, blobId: string | null): Promise<T__2>;
+    deleteMemory(sessionId: string, memoryId: bigint): Promise<void>;
+    getMemories(): Promise<Array<T__2>>;
 }
 import type { Emotion as _Emotion, Id as _Id, T__1 as _T__1, T__2 as _T__2, UserProfile as _UserProfile, UserRole as _UserRole, _CaffeineStorageRefillInformation as __CaffeineStorageRefillInformation, _CaffeineStorageRefillResult as __CaffeineStorageRefillResult } from "./declarations/backend.did.d.ts";
 export class Backend implements backendInterface {
     constructor(private actor: ActorSubclass<_SERVICE>, private _uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, private _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, private processError?: (error: unknown) => never){}
-    async _caffeineStorageBlobIsLive(arg0: Uint8Array): Promise<boolean> {
+
+    private async _call<T>(fn: () => Promise<T>): Promise<T> {
         if (this.processError) {
             try {
-                const result = await this.actor._caffeineStorageBlobIsLive(arg0);
-                return result;
+                return await fn();
             } catch (e) {
                 this.processError(e);
                 throw new Error("unreachable");
             }
-        } else {
-            const result = await this.actor._caffeineStorageBlobIsLive(arg0);
-            return result;
         }
+        return await fn();
+    }
+
+    async _caffeineStorageBlobIsLive(arg0: Uint8Array): Promise<boolean> {
+        return this._call(() => this.actor._caffeineStorageBlobIsLive(arg0));
     }
     async _caffeineStorageBlobsToDelete(): Promise<Array<Uint8Array>> {
-        if (this.processError) {
-            try {
-                const result = await this.actor._caffeineStorageBlobsToDelete();
-                return result;
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor._caffeineStorageBlobsToDelete();
-            return result;
-        }
+        return this._call(() => this.actor._caffeineStorageBlobsToDelete());
     }
     async _caffeineStorageConfirmBlobDeletion(arg0: Array<Uint8Array>): Promise<void> {
-        if (this.processError) {
-            try {
-                const result = await this.actor._caffeineStorageConfirmBlobDeletion(arg0);
-                return result;
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor._caffeineStorageConfirmBlobDeletion(arg0);
-            return result;
-        }
+        return this._call(() => this.actor._caffeineStorageConfirmBlobDeletion(arg0));
     }
     async _caffeineStorageCreateCertificate(arg0: string): Promise<_CaffeineStorageCreateCertificateResult> {
-        if (this.processError) {
-            try {
-                const result = await this.actor._caffeineStorageCreateCertificate(arg0);
-                return result;
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor._caffeineStorageCreateCertificate(arg0);
-            return result;
-        }
+        return this._call(() => this.actor._caffeineStorageCreateCertificate(arg0));
     }
     async _caffeineStorageRefillCashier(arg0: _CaffeineStorageRefillInformation | null): Promise<_CaffeineStorageRefillResult> {
-        if (this.processError) {
-            try {
-                const result = await this.actor._caffeineStorageRefillCashier(to_candid_opt_n1(this._uploadFile, this._downloadFile, arg0));
-                return from_candid__CaffeineStorageRefillResult_n4(this._uploadFile, this._downloadFile, result);
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
+        return this._call(async () => {
             const result = await this.actor._caffeineStorageRefillCashier(to_candid_opt_n1(this._uploadFile, this._downloadFile, arg0));
             return from_candid__CaffeineStorageRefillResult_n4(this._uploadFile, this._downloadFile, result);
-        }
+        });
     }
     async _caffeineStorageUpdateGatewayPrincipals(): Promise<void> {
-        if (this.processError) {
-            try {
-                const result = await this.actor._caffeineStorageUpdateGatewayPrincipals();
-                return result;
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor._caffeineStorageUpdateGatewayPrincipals();
-            return result;
-        }
+        return this._call(() => this.actor._caffeineStorageUpdateGatewayPrincipals());
     }
-    async _initializeAccessControlWithSecret(arg0: string): Promise<void> {
-        if (this.processError) {
-            try {
-                const result = await this.actor._initializeAccessControlWithSecret(arg0);
-                return result;
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor._initializeAccessControlWithSecret(arg0);
-            return result;
-        }
+
+    // New sessionId-based auth methods
+    async registerUser(sessionId: string, name: string, passkey: string): Promise<void> {
+        return this._call(() => (this.actor as any).registerUser(sessionId, name, passkey));
     }
-    async addReaction(arg0: bigint, arg1: string): Promise<void> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.addReaction(arg0, arg1);
-                return result;
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.addReaction(arg0, arg1);
-            return result;
-        }
+    async getProfile(sessionId: string): Promise<UserProfile | null> {
+        return this._call(async () => {
+            const result = await (this.actor as any).getProfile(sessionId);
+            return result.length === 0 ? null : result[0];
+        });
     }
-    async assignCallerUserRole(arg0: Principal, arg1: UserRole): Promise<void> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.assignCallerUserRole(arg0, to_candid_UserRole_n8(this._uploadFile, this._downloadFile, arg1));
-                return result;
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.assignCallerUserRole(arg0, to_candid_UserRole_n8(this._uploadFile, this._downloadFile, arg1));
-            return result;
-        }
-    }
-    async createMemory(arg0: string, arg1: string, arg2: string | null, arg3: string | null): Promise<T__2> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.createMemory(arg0, arg1, to_candid_opt_n10(this._uploadFile, this._downloadFile, arg2), to_candid_opt_n10(this._uploadFile, this._downloadFile, arg3));
-                return from_candid_T__2_n11(this._uploadFile, this._downloadFile, result);
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.createMemory(arg0, arg1, to_candid_opt_n10(this._uploadFile, this._downloadFile, arg2), to_candid_opt_n10(this._uploadFile, this._downloadFile, arg3));
-            return from_candid_T__2_n11(this._uploadFile, this._downloadFile, result);
-        }
-    }
-    async deleteMemory(arg0: bigint): Promise<void> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.deleteMemory(arg0);
-                return result;
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.deleteMemory(arg0);
-            return result;
-        }
-    }
-    async getBlobLink(arg0: string): Promise<string | null> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.getBlobLink(arg0);
-                return from_candid_opt_n13(this._uploadFile, this._downloadFile, result);
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.getBlobLink(arg0);
-            return from_candid_opt_n13(this._uploadFile, this._downloadFile, result);
-        }
-    }
-    async getCallerUserProfile(): Promise<UserProfile | null> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.getCallerUserProfile();
-                return from_candid_opt_n14(this._uploadFile, this._downloadFile, result);
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.getCallerUserProfile();
-            return from_candid_opt_n14(this._uploadFile, this._downloadFile, result);
-        }
-    }
-    async getCallerUserRole(): Promise<UserRole> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.getCallerUserRole();
-                return from_candid_UserRole_n15(this._uploadFile, this._downloadFile, result);
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.getCallerUserRole();
-            return from_candid_UserRole_n15(this._uploadFile, this._downloadFile, result);
-        }
-    }
-    async getDailyPrompt(arg0: bigint): Promise<string> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.getDailyPrompt(arg0);
-                return result;
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.getDailyPrompt(arg0);
-            return result;
-        }
-    }
-    async getMemories(): Promise<Array<T__2>> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.getMemories();
-                return from_candid_vec_n17(this._uploadFile, this._downloadFile, result);
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.getMemories();
-            return from_candid_vec_n17(this._uploadFile, this._downloadFile, result);
-        }
-    }
-    async getMessages(): Promise<Array<T>> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.getMessages();
-                return result;
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.getMessages();
-            return result;
-        }
+    async saveProfile(sessionId: string, profile: UserProfile): Promise<void> {
+        return this._call(() => (this.actor as any).saveProfile(sessionId, profile));
     }
     async getStartDate(): Promise<string> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.getStartDate();
-                return result;
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.getStartDate();
-            return result;
-        }
+        return this._call(() => (this.actor as any).getStartDate());
     }
-    async getTodayCheckIns(arg0: string): Promise<Array<T__1>> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.getTodayCheckIns(arg0);
-                return from_candid_vec_n18(this._uploadFile, this._downloadFile, result);
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.getTodayCheckIns(arg0);
+    async updateStartDate(sessionId: string, date: string): Promise<void> {
+        return this._call(() => (this.actor as any).updateStartDate(sessionId, date));
+    }
+    async submitCheckIn(sessionId: string, date: string, emotion: Emotion): Promise<void> {
+        return this._call(() => (this.actor as any).submitCheckIn(sessionId, date, to_candid_Emotion_n24(this._uploadFile, this._downloadFile, emotion)));
+    }
+    async getTodayCheckIns(date: string): Promise<Array<T__1>> {
+        return this._call(async () => {
+            const result = await (this.actor as any).getTodayCheckIns(date);
             return from_candid_vec_n18(this._uploadFile, this._downloadFile, result);
-        }
+        });
     }
-    async getUserCheckIn(arg0: string): Promise<T__1 | null> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.getUserCheckIn(arg0);
-                return from_candid_opt_n23(this._uploadFile, this._downloadFile, result);
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.getUserCheckIn(arg0);
+    async getUserCheckIn(sessionId: string, date: string): Promise<T__1 | null> {
+        return this._call(async () => {
+            const result = await (this.actor as any).getUserCheckIn(sessionId, date);
             return from_candid_opt_n23(this._uploadFile, this._downloadFile, result);
-        }
+        });
     }
-    async getUserProfile(arg0: Principal): Promise<UserProfile | null> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.getUserProfile(arg0);
-                return from_candid_opt_n14(this._uploadFile, this._downloadFile, result);
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.getUserProfile(arg0);
-            return from_candid_opt_n14(this._uploadFile, this._downloadFile, result);
-        }
+    async getDailyPrompt(dayOfYear: bigint): Promise<string> {
+        return this._call(() => (this.actor as any).getDailyPrompt(dayOfYear));
     }
-    async isCallerAdmin(): Promise<boolean> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.isCallerAdmin();
-                return result;
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.isCallerAdmin();
-            return result;
-        }
+    async sendMessage(sessionId: string, authorName: string, text: string): Promise<T> {
+        return this._call(() => (this.actor as any).sendMessage(sessionId, authorName, text));
     }
-    async registerWithInviteCode(arg0: string, arg1: UserProfile): Promise<void> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.registerWithInviteCode(arg0, arg1);
-                return result;
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.registerWithInviteCode(arg0, arg1);
-            return result;
-        }
+    async addReaction(sessionId: string, messageId: bigint, emoji: string): Promise<void> {
+        return this._call(() => (this.actor as any).addReaction(sessionId, messageId, emoji));
     }
-    async removeReaction(arg0: bigint, arg1: string): Promise<void> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.removeReaction(arg0, arg1);
-                return result;
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.removeReaction(arg0, arg1);
-            return result;
-        }
+    async removeReaction(sessionId: string, messageId: bigint, emoji: string): Promise<void> {
+        return this._call(() => (this.actor as any).removeReaction(sessionId, messageId, emoji));
     }
-    async saveCallerUserProfile(arg0: UserProfile): Promise<void> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.saveCallerUserProfile(arg0);
-                return result;
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.saveCallerUserProfile(arg0);
-            return result;
-        }
+    async getMessages(): Promise<Array<T>> {
+        return this._call(() => (this.actor as any).getMessages());
     }
-    async sendMessage(arg0: string, arg1: string): Promise<T> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.sendMessage(arg0, arg1);
-                return result;
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.sendMessage(arg0, arg1);
-            return result;
-        }
+    async createMemory(sessionId: string, authorName: string, title: string, description: string | null, blobId: string | null): Promise<T__2> {
+        return this._call(async () => {
+            const result = await (this.actor as any).createMemory(
+                sessionId, authorName, title,
+                to_candid_opt_n10(this._uploadFile, this._downloadFile, description),
+                to_candid_opt_n10(this._uploadFile, this._downloadFile, blobId)
+            );
+            return from_candid_T__2_n11(this._uploadFile, this._downloadFile, result);
+        });
     }
-    async submitCheckIn(arg0: string, arg1: Emotion): Promise<void> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.submitCheckIn(arg0, to_candid_Emotion_n24(this._uploadFile, this._downloadFile, arg1));
-                return result;
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.submitCheckIn(arg0, to_candid_Emotion_n24(this._uploadFile, this._downloadFile, arg1));
-            return result;
-        }
+    async deleteMemory(sessionId: string, memoryId: bigint): Promise<void> {
+        return this._call(() => (this.actor as any).deleteMemory(sessionId, memoryId));
     }
-    async updateInviteCode(arg0: string): Promise<void> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.updateInviteCode(arg0);
-                return result;
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.updateInviteCode(arg0);
-            return result;
-        }
-    }
-    async updateStartDate(arg0: string): Promise<void> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.updateStartDate(arg0);
-                return result;
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.updateStartDate(arg0);
-            return result;
-        }
+    async getMemories(): Promise<Array<T__2>> {
+        return this._call(async () => {
+            const result = await (this.actor as any).getMemories();
+            return from_candid_vec_n17(this._uploadFile, this._downloadFile, result);
+        });
     }
 }
+
 function from_candid_Emotion_n21(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _Emotion): Emotion {
     return from_candid_variant_n22(_uploadFile, _downloadFile, value);
 }
@@ -764,6 +455,7 @@ function to_candid_variant_n9(_uploadFile: (file: ExternalBlob) => Promise<Uint8
         guest: null
     } : value;
 }
+
 export interface CreateActorOptions {
     agent?: Agent;
     agentOptions?: HttpAgentOptions;

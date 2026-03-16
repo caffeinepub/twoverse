@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Emotion } from "../backend.d";
+import { useLocalAuth } from "../contexts/LocalAuthContext";
 import { useActor } from "../hooks/useActor";
 import { getDayOfYear, todayStr } from "../lib/helpers";
 import { cn } from "../lib/utils";
@@ -15,6 +16,7 @@ const emotions: { value: Emotion; label: string; emoji: string }[] = [
 
 export function PromptsPage() {
   const { actor } = useActor();
+  const { sessionId } = useLocalAuth();
   const [prompt, setPrompt] = useState("");
   const [myCheckIn, setMyCheckIn] = useState<Emotion | null>(null);
   const [allCheckIns, setAllCheckIns] = useState<{ emotion: Emotion }[]>([]);
@@ -22,26 +24,26 @@ export function PromptsPage() {
   const today = todayStr();
 
   const load = useCallback(async () => {
-    if (!actor) return;
+    if (!actor || !sessionId) return;
     const [p, mine, all] = await Promise.all([
       actor.getDailyPrompt(getDayOfYear(new Date())),
-      actor.getUserCheckIn(today),
+      actor.getUserCheckIn(sessionId, today),
       actor.getTodayCheckIns(today),
     ]);
     setPrompt(p);
     setMyCheckIn(mine ? mine.emotion : null);
     setAllCheckIns(all);
-  }, [actor, today]);
+  }, [actor, sessionId, today]);
 
   useEffect(() => {
     load();
   }, [load]);
 
   const submit = async (emotion: Emotion) => {
-    if (!actor || myCheckIn !== null) return;
+    if (!actor || myCheckIn !== null || !sessionId) return;
     setSubmitting(true);
     try {
-      await actor.submitCheckIn(today, emotion);
+      await actor.submitCheckIn(sessionId, today, emotion);
       setMyCheckIn(emotion);
       const all = await actor.getTodayCheckIns(today);
       setAllCheckIns(all);
@@ -109,11 +111,11 @@ export function PromptsPage() {
             Everyone today
           </div>
           <div className="flex flex-wrap gap-2">
-            {allCheckIns.map((ci) => {
+            {allCheckIns.map((ci, idx) => {
               const found = emotions.find((e) => e.value === ci.emotion);
               return (
                 <div
-                  key={ci.emotion}
+                  key={`${ci.emotion}-${idx}`}
                   className="flex items-center gap-1.5 bg-pink-50 rounded-full px-3 py-1.5 text-sm text-gray-600"
                 >
                   <span>{found?.emoji ?? "💭"}</span>

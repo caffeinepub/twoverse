@@ -3,28 +3,24 @@ import { useEffect, useState } from "react";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
+import { useLocalAuth } from "../contexts/LocalAuthContext";
 import { THEMES, useTheme } from "../contexts/ThemeContext";
 import { useActor } from "../hooks/useActor";
-import { useInternetIdentity } from "../hooks/useInternetIdentity";
 
 export function SettingsPage() {
   const { actor } = useActor();
-  const { clear } = useInternetIdentity();
+  const { sessionId, name: authName, logout } = useLocalAuth();
   const { theme: activeTheme, setTheme } = useTheme();
   const [startDate, setStartDate] = useState("");
-  const [inviteCode, setInviteCode] = useState("");
-  const [displayName, setDisplayName] = useState("");
+  const [displayName, setDisplayName] = useState(authName);
   const [saving, setSaving] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
   useEffect(() => {
     if (!actor) return;
-    Promise.all([actor.getStartDate(), actor.getCallerUserProfile()]).then(
-      ([date, profile]) => {
-        setStartDate(date || "");
-        if (profile) setDisplayName(profile.name);
-      },
-    );
+    actor.getStartDate().then((date) => {
+      setStartDate(date || "");
+    });
   }, [actor]);
 
   const save = async (section: string, fn: () => Promise<void>) => {
@@ -60,7 +56,7 @@ export function SettingsPage() {
           data-ocid="settings.save_name_button"
           onClick={() =>
             save("name", () =>
-              actor!.saveCallerUserProfile({ name: displayName }),
+              actor!.saveProfile(sessionId, { name: displayName }),
             )
           }
           disabled={saving === "name"}
@@ -93,7 +89,9 @@ export function SettingsPage() {
         />
         <Button
           data-ocid="settings.save_start_date_button"
-          onClick={() => save("date", () => actor!.updateStartDate(startDate))}
+          onClick={() =>
+            save("date", () => actor!.updateStartDate(sessionId, startDate))
+          }
           disabled={saving === "date"}
           size="sm"
           className="bg-pink-400 hover:bg-pink-500 text-white rounded-xl w-full"
@@ -106,39 +104,6 @@ export function SettingsPage() {
         </Button>
       </div>
 
-      {/* Invite Code */}
-      <div className="bg-white rounded-2xl p-5 shadow-sm border border-pink-100">
-        <div className="text-xs font-semibold text-pink-400 uppercase tracking-widest mb-3">
-          Invite Code
-        </div>
-        <Label htmlFor="set-invite" className="text-xs text-gray-500">
-          Share this code with your people
-        </Label>
-        <Input
-          id="set-invite"
-          data-ocid="settings.invite_code_input"
-          value={inviteCode}
-          onChange={(e) => setInviteCode(e.target.value)}
-          placeholder="Enter new invite code"
-          className="mt-1 mb-3 rounded-xl border-pink-200"
-        />
-        <Button
-          data-ocid="settings.save_invite_code_button"
-          onClick={() =>
-            save("invite", () => actor!.updateInviteCode(inviteCode))
-          }
-          disabled={saving === "invite" || !inviteCode.trim()}
-          size="sm"
-          className="bg-pink-400 hover:bg-pink-500 text-white rounded-xl w-full"
-        >
-          {saving === "invite"
-            ? "Saving..."
-            : success === "invite"
-              ? "Saved ✓"
-              : "Update Invite Code"}
-        </Button>
-      </div>
-
       {/* Customize Theme */}
       <div className="bg-white rounded-2xl p-5 shadow-sm border border-pink-100">
         <div className="flex items-center gap-2 mb-1">
@@ -148,7 +113,7 @@ export function SettingsPage() {
           </div>
         </div>
         <p className="text-xs text-gray-400 mb-4">
-          Choose your app&apos;s look &amp; feel
+          Choose your app's look &amp; feel
         </p>
         <div className="grid grid-cols-2 gap-3">
           {THEMES.map((t, i) => {
@@ -167,7 +132,6 @@ export function SettingsPage() {
                 ].join(" ")}
                 style={{ background: t.gradient }}
               >
-                {/* Color swatches */}
                 <div className="flex gap-1.5 mb-2">
                   {t.preview.map((color) => (
                     <span
@@ -177,7 +141,6 @@ export function SettingsPage() {
                     />
                   ))}
                 </div>
-                {/* Name & description */}
                 <p
                   className="text-xs font-bold leading-tight"
                   style={{ color: t.isDark ? "#e2e8f0" : "#374151" }}
@@ -192,7 +155,6 @@ export function SettingsPage() {
                 >
                   {t.description}
                 </p>
-                {/* Active checkmark */}
                 {isActive && (
                   <span className="absolute top-2 right-2 w-5 h-5 rounded-full bg-pink-400 flex items-center justify-center shadow">
                     <Check size={11} className="text-white" strokeWidth={3} />
@@ -206,7 +168,7 @@ export function SettingsPage() {
 
       <Button
         data-ocid="settings.logout_button"
-        onClick={clear}
+        onClick={logout}
         variant="outline"
         className="w-full rounded-xl border-red-200 text-red-400 hover:bg-red-50 hover:text-red-500 mt-2"
       >

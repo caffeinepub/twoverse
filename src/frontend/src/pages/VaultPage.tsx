@@ -12,8 +12,8 @@ import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Textarea } from "../components/ui/textarea";
 import { loadConfig } from "../config";
+import { useLocalAuth } from "../contexts/LocalAuthContext";
 import { useActor } from "../hooks/useActor";
-import { useInternetIdentity } from "../hooks/useInternetIdentity";
 import { useStorageUpload } from "../hooks/useStorageUpload";
 import { formatDate } from "../lib/helpers";
 
@@ -29,21 +29,18 @@ async function getBlobUrl(blobId: string): Promise<string> {
 
 export function VaultPage() {
   const { actor } = useActor();
-  const { identity } = useInternetIdentity();
+  const { sessionId, name: userName } = useLocalAuth();
   const { uploadFile } = useStorageUpload();
   const [memories, setMemories] = useState<Memory[]>([]);
   const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
-  const [userName, setUserName] = useState("You");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [photo, setPhoto] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [error, setError] = useState("");
-
-  const myPrincipal = identity?.getPrincipal().toUint8Array();
 
   const loadMemories = useCallback(async () => {
     if (!actor) return;
@@ -58,7 +55,7 @@ export function VaultPage() {
             const url = await getBlobUrl(m.blobId as string);
             urls[m.blobId as string] = url;
           } catch {
-            // skip if URL construction fails
+            // skip
           }
         }),
     );
@@ -67,14 +64,11 @@ export function VaultPage() {
 
   useEffect(() => {
     if (!actor) return;
-    actor.getCallerUserProfile().then((p) => {
-      if (p) setUserName(p.name);
-    });
     loadMemories().finally(() => setLoading(false));
   }, [actor, loadMemories]);
 
   const handleAdd = async () => {
-    if (!actor) return;
+    if (!actor || !sessionId) return;
     if (!title.trim()) {
       setError("Title is required.");
       return;
@@ -87,6 +81,7 @@ export function VaultPage() {
         blobId = await uploadFile(photo, (pct) => setUploadProgress(pct));
       }
       await actor.createMemory(
+        sessionId,
         userName,
         title.trim(),
         description.trim() || null,
@@ -106,18 +101,12 @@ export function VaultPage() {
   };
 
   const handleDelete = async (id: bigint) => {
-    if (!actor) return;
-    await actor.deleteMemory(id);
+    if (!actor || !sessionId) return;
+    await actor.deleteMemory(sessionId, id);
     await loadMemories();
   };
 
-  const isOwn = (mem: Memory) => {
-    if (!myPrincipal) return false;
-    return (
-      JSON.stringify(Array.from(mem.authorId)) ===
-      JSON.stringify(Array.from(myPrincipal))
-    );
-  };
+  const isOwn = (mem: Memory) => mem.authorId === sessionId;
 
   return (
     <div className="px-4 py-4 max-w-lg mx-auto">

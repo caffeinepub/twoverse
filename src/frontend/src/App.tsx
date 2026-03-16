@@ -5,12 +5,10 @@ import {
   createRouter,
 } from "@tanstack/react-router";
 import { Heart } from "lucide-react";
-import { useEffect, useState } from "react";
 import { BottomNav } from "./components/BottomNav";
 import { ParticleCanvas } from "./components/ParticleCanvas";
+import { LocalAuthProvider, useLocalAuth } from "./contexts/LocalAuthContext";
 import { ThemeProvider, useTheme } from "./contexts/ThemeContext";
-import { useActor } from "./hooks/useActor";
-import { useInternetIdentity } from "./hooks/useInternetIdentity";
 import { AnalyticsPage } from "./pages/AnalyticsPage";
 import { AnniversaryPage } from "./pages/AnniversaryPage";
 import { AuthPage } from "./pages/AuthPage";
@@ -75,7 +73,6 @@ const dashboardRoute = createRoute({
     </PageLayout>
   ),
 });
-
 const chatRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/chat",
@@ -85,7 +82,6 @@ const chatRoute = createRoute({
     </PageLayout>
   ),
 });
-
 const vaultRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/vault",
@@ -95,7 +91,6 @@ const vaultRoute = createRoute({
     </PageLayout>
   ),
 });
-
 const promptsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/prompts",
@@ -105,7 +100,6 @@ const promptsRoute = createRoute({
     </PageLayout>
   ),
 });
-
 const moreRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/more",
@@ -115,7 +109,6 @@ const moreRoute = createRoute({
     </PageLayout>
   ),
 });
-
 const missionsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/missions",
@@ -125,7 +118,6 @@ const missionsRoute = createRoute({
     </PageLayout>
   ),
 });
-
 const analyticsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/analytics",
@@ -135,7 +127,6 @@ const analyticsRoute = createRoute({
     </PageLayout>
   ),
 });
-
 const anniversaryRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/anniversary",
@@ -145,7 +136,6 @@ const anniversaryRoute = createRoute({
     </PageLayout>
   ),
 });
-
 const timeCapsuleRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/time-capsule",
@@ -155,7 +145,6 @@ const timeCapsuleRoute = createRoute({
     </PageLayout>
   ),
 });
-
 const quizRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/quiz",
@@ -165,7 +154,6 @@ const quizRoute = createRoute({
     </PageLayout>
   ),
 });
-
 const settingsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/settings",
@@ -189,17 +177,12 @@ const routeTree = rootRoute.addChildren([
   quizRoute,
   settingsRoute,
 ]);
-
 const router = createRouter({ routeTree });
 
 declare module "@tanstack/react-router" {
   interface Register {
     router: typeof router;
   }
-}
-
-function AuthenticatedApp() {
-  return <RouterProvider router={router} />;
 }
 
 function LoadingScreen({ message }: { message: string }) {
@@ -220,70 +203,24 @@ function LoadingScreen({ message }: { message: string }) {
   );
 }
 
-function RegistrationGate() {
-  const { actor, isFetching } = useActor();
-  const { identity } = useInternetIdentity();
-  const [registrationChecked, setRegistrationChecked] = useState(false);
-  const [isRegistered, setIsRegistered] = useState(false);
+function AppContent() {
+  const { isAuthenticated } = useLocalAuth();
 
-  useEffect(() => {
-    if (!actor || isFetching || !identity) return;
-
-    let cancelled = false;
-    (async () => {
-      try {
-        const profile = await actor.getCallerUserProfile();
-        if (!cancelled) {
-          setIsRegistered(profile !== null);
-          setRegistrationChecked(true);
-        }
-      } catch {
-        if (!cancelled) {
-          // Backend trap = user not registered
-          setIsRegistered(false);
-          setRegistrationChecked(true);
-        }
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [actor, isFetching, identity]);
-
-  if (!registrationChecked) {
-    return <LoadingScreen message="Checking your account..." />;
+  if (!isAuthenticated) {
+    return <AuthPage />;
   }
 
-  if (!isRegistered) {
-    return <AuthPage defaultTab="register" sessionExpired />;
-  }
-
-  return <AuthenticatedApp />;
+  return <RouterProvider router={router} />;
 }
 
 export default function App() {
-  const { identity, isInitializing } = useInternetIdentity();
-
-  if (isInitializing) {
-    return (
-      <ThemeProvider>
-        <LoadingScreen message="Loading your world..." />
-      </ThemeProvider>
-    );
-  }
-
-  if (!identity) {
-    return (
-      <ThemeProvider>
-        <AuthPage />
-      </ThemeProvider>
-    );
-  }
-
   return (
     <ThemeProvider>
-      <RegistrationGate />
+      <LocalAuthProvider>
+        <AppContent />
+      </LocalAuthProvider>
     </ThemeProvider>
   );
 }
+
+export { LoadingScreen };

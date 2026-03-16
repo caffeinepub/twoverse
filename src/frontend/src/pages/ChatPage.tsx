@@ -4,8 +4,8 @@ import { toast } from "sonner";
 import type { T as Message } from "../backend.d";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
+import { useLocalAuth } from "../contexts/LocalAuthContext";
 import { useActor } from "../hooks/useActor";
-import { useInternetIdentity } from "../hooks/useInternetIdentity";
 import { formatTimestamp } from "../lib/helpers";
 
 const QUICK_EMOJIS = ["❤️", "😘", "🥰", "💕", "😊"];
@@ -13,15 +13,12 @@ const REACTION_EMOJIS = ["❤️", "😘", "🥰", "💕", "😊", "😂", "🤗
 
 export function ChatPage() {
   const { actor } = useActor();
-  const { identity } = useInternetIdentity();
+  const { sessionId, name: userName } = useLocalAuth();
   const [messages, setMessages] = useState<Message[]>([]);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
-  const [userName, setUserName] = useState("You");
   const [openReactionFor, setOpenReactionFor] = useState<bigint | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
-
-  const myPrincipal = identity?.getPrincipal().toUint8Array();
 
   const loadMessages = useCallback(async () => {
     if (!actor) return;
@@ -31,9 +28,6 @@ export function ChatPage() {
 
   useEffect(() => {
     if (!actor) return;
-    actor.getCallerUserProfile().then((p) => {
-      if (p) setUserName(p.name);
-    });
     loadMessages();
     const interval = setInterval(loadMessages, 3000);
     return () => clearInterval(interval);
@@ -45,19 +39,13 @@ export function ChatPage() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messagesCount]);
 
-  const isOwn = (msg: Message): boolean => {
-    if (!myPrincipal) return false;
-    return (
-      JSON.stringify(Array.from(msg.authorId)) ===
-      JSON.stringify(Array.from(myPrincipal))
-    );
-  };
+  const isOwn = (msg: Message): boolean => msg.authorId === sessionId;
 
   const send = async () => {
     if (!actor || !text.trim()) return;
     setSending(true);
     try {
-      const msg = await actor.sendMessage(userName, text.trim());
+      const msg = await actor.sendMessage(sessionId, userName, text.trim());
       setMessages((prev) => [...prev, msg]);
       setText("");
     } finally {
@@ -65,15 +53,8 @@ export function ChatPage() {
     }
   };
 
-  const hasReacted = (msg: Message, emoji: string) => {
-    if (!myPrincipal) return false;
-    return msg.reactions.some(
-      (r) =>
-        r.emoji === emoji &&
-        JSON.stringify(Array.from(r.userId)) ===
-          JSON.stringify(Array.from(myPrincipal)),
-    );
-  };
+  const hasReacted = (msg: Message, emoji: string) =>
+    msg.reactions.some((r) => r.emoji === emoji && r.sessionId === sessionId);
 
   const toggleReaction = async (
     msgId: bigint,
@@ -82,9 +63,9 @@ export function ChatPage() {
   ) => {
     if (!actor) return;
     if (already) {
-      await actor.removeReaction(msgId, emoji);
+      await actor.removeReaction(sessionId, msgId, emoji);
     } else {
-      await actor.addReaction(msgId, emoji);
+      await actor.addReaction(sessionId, msgId, emoji);
     }
     await loadMessages();
     setOpenReactionFor(null);
@@ -94,6 +75,7 @@ export function ChatPage() {
     if (!actor) return;
     try {
       await actor.createMemory(
+        sessionId,
         userName,
         `Message from ${msg.authorName}`,
         msg.text,
@@ -232,7 +214,6 @@ export function ChatPage() {
         <div ref={bottomRef} />
       </div>
 
-      {/* Quick emoji bar */}
       <div className="px-4 pt-2 flex gap-2 max-w-lg mx-auto w-full">
         {QUICK_EMOJIS.map((e) => (
           <button

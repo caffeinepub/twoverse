@@ -1,13 +1,12 @@
 import Map "mo:core/Map";
 import Text "mo:core/Text";
+import Principal "mo:core/Principal";
 import Time "mo:core/Time";
 import Nat "mo:core/Nat";
 import Int "mo:core/Int";
 import Order "mo:core/Order";
 import List "mo:core/List";
-import Blob "mo:core/Blob";
 import Runtime "mo:core/Runtime";
-import Principal "mo:core/Principal";
 import MixinStorage "blob-storage/Mixin";
 import MixinAuthorization "authorization/MixinAuthorization";
 import AccessControl "authorization/access-control";
@@ -15,37 +14,68 @@ import AccessControl "authorization/access-control";
 actor {
   stable var _messageId : Nat = 0;
   stable var _memoryId : Nat = 0;
-  stable var inviteCode : Text = "twvrs23";
   stable var startDate : Text = "";
+
+  // ===== Kept for upgrade compatibility (not used in new logic) =====
+  stable var inviteCode : Text = "";
+
+  let PASSKEY : Text = "3275";
 
   public type UserProfile = { name : Text };
 
-  module CheckIn {
+  // Old types - kept so stable Maps/Lists with these types load correctly on upgrade
+  module OldCheckIn {
     public type Emotion = { #happy; #calm; #stressed; #tired; #excited; #sad };
     public type T = { userId : Blob; date : Text; emotion : Emotion };
   };
-
-  module Message {
-    public type Reaction = { emoji : Text; userId : Blob };
+  module OldReaction = {
+    public type T = { emoji : Text; userId : Blob };
+  };
+  module OldMessage {
     public type T = {
       id : Nat; authorId : Blob; authorName : Text;
+      text : Text; timestamp : Int; reactions : [OldReaction.T];
+    };
+  };
+  module OldMemory {
+    public type T = {
+      id : Nat; authorId : Blob; authorName : Text; title : Text;
+      description : ?Text; blobId : ?Text; timestamp : Int;
+    };
+  };
+
+  // New types
+  module CheckIn {
+    public type Emotion = { #happy; #calm; #stressed; #tired; #excited; #sad };
+    public type T = { sessionId : Text; date : Text; emotion : Emotion };
+  };
+  module Message {
+    public type Reaction = { emoji : Text; sessionId : Text };
+    public type T = {
+      id : Nat; authorId : Text; authorName : Text;
       text : Text; timestamp : Int; reactions : [Reaction];
     };
     public func compare(a : T, b : T) : Order.Order { Nat.compare(a.id, b.id) };
   };
-
   module Memory {
     public type T = {
-      id : Nat; authorId : Blob; authorName : Text; title : Text;
+      id : Nat; authorId : Text; authorName : Text; title : Text;
       description : ?Text; blobId : ?Text; timestamp : Int;
     };
     public func compare(a : T, b : T) : Order.Order { Int.compare(b.timestamp, a.timestamp) };
   };
 
+  // OLD stable arrays - kept with original names/types for upgrade compat
   stable var stableUserProfiles : [(Principal, UserProfile)] = [];
-  stable var stableMessages : [Message.T] = [];
-  stable var stableMemories : [Memory.T] = [];
-  stable var stableCheckIns : [CheckIn.T] = [];
+  stable var stableMessages : [OldMessage.T] = [];
+  stable var stableMemories : [OldMemory.T] = [];
+  stable var stableCheckIns : [OldCheckIn.T] = [];
+
+  // NEW stable arrays
+  stable var stableUserProfiles2 : [(Text, UserProfile)] = [];
+  stable var stableMessages2 : [Message.T] = [];
+  stable var stableMemories2 : [Memory.T] = [];
+  stable var stableCheckIns2 : [CheckIn.T] = [];
 
   let promptArray = [
     "What is your favorite thing about today?",
@@ -70,21 +100,33 @@ actor {
     "What makes you feel loved?",
   ];
 
+  // OLD live stable Maps - kept with original types/names for upgrade compat
   let accessControlState = AccessControl.initState();
   include MixinAuthorization(accessControlState);
   include MixinStorage();
-
   let storage = Map.empty<Text, Text>();
   let userProfiles = Map.empty<Principal, UserProfile>();
-  let checkIns = List.empty<CheckIn.T>();
-  let messages = List.empty<Message.T>();
-  let memories = List.empty<Memory.T>();
+  let checkIns = List.empty<OldCheckIn.T>();
+  let messages = List.empty<OldMessage.T>();
+  let memories = List.empty<OldMemory.T>();
+
+  // NEW live stable vars
+  let userProfilesV2 = Map.empty<Text, UserProfile>();
+  let checkInsV2 = List.empty<CheckIn.T>();
+  let messagesV2 = List.empty<Message.T>();
+  let memoriesV2 = List.empty<Memory.T>();
 
   do {
+    // Load old data into old vars (for upgrade compat - they get populated but unused)
     for ((p, profile) in stableUserProfiles.values()) { userProfiles.add(p, profile) };
     for (msg in stableMessages.values()) { messages.add(msg) };
     for (mem in stableMemories.values()) { memories.add(mem) };
     for (ci in stableCheckIns.values()) { checkIns.add(ci) };
+    // Load new data into new vars
+    for ((sid, profile) in stableUserProfiles2.values()) { userProfilesV2.add(sid, profile) };
+    for (msg in stableMessages2.values()) { messagesV2.add(msg) };
+    for (mem in stableMemories2.values()) { memoriesV2.add(mem) };
+    for (ci in stableCheckIns2.values()) { checkInsV2.add(ci) };
   };
 
   system func preupgrade() {
@@ -92,6 +134,10 @@ actor {
     stableMessages := messages.toArray();
     stableMemories := memories.toArray();
     stableCheckIns := checkIns.toArray();
+    stableUserProfiles2 := userProfilesV2.entries().toArray();
+    stableMessages2 := messagesV2.toArray();
+    stableMemories2 := memoriesV2.toArray();
+    stableCheckIns2 := checkInsV2.toArray();
   };
 
   system func postupgrade() {
@@ -99,167 +145,138 @@ actor {
     stableMessages := [];
     stableMemories := [];
     stableCheckIns := [];
+    stableUserProfiles2 := [];
+    stableMessages2 := [];
+    stableMemories2 := [];
+    stableCheckIns2 := [];
   };
 
-  func countUsers() : Nat {
-    var count = 0;
-    for ((principal, _) in userProfiles.entries()) {
-      if (AccessControl.hasPermission(accessControlState, principal, #user)) { count += 1 };
-    };
-    count;
+  func validateSession(sessionId : Text) {
+    if (sessionId.size() == 0) { Runtime.trap("Invalid session") };
+    if (not userProfilesV2.containsKey(sessionId)) { Runtime.trap("Not registered") };
   };
 
-  public query ({ caller }) func getCallerUserProfile() : async ?UserProfile {
-    if (not AccessControl.hasPermission(accessControlState, caller, #user)) { Runtime.trap("Unauthorized") };
-    userProfiles.get(caller);
+  public shared func registerUser(sessionId : Text, name : Text, passkey : Text) : async () {
+    if (passkey != PASSKEY) { Runtime.trap("Wrong passkey") };
+    if (sessionId.size() == 0) { Runtime.trap("Invalid session ID") };
+    if (userProfilesV2.containsKey(sessionId)) { return };
+    if (userProfilesV2.size() >= 3) { Runtime.trap("This TwoVerse is full — max 3 members") };
+    userProfilesV2.add(sessionId, { name });
   };
 
-  public query ({ caller }) func getUserProfile(user : Principal) : async ?UserProfile {
-    if (not AccessControl.hasPermission(accessControlState, caller, #user)) { Runtime.trap("Unauthorized") };
-    userProfiles.get(user);
+  public query func getProfile(sessionId : Text) : async ?UserProfile {
+    userProfilesV2.get(sessionId);
   };
 
-  public shared ({ caller }) func saveCallerUserProfile(profile : UserProfile) : async () {
-    if (not AccessControl.hasPermission(accessControlState, caller, #user)) { Runtime.trap("Unauthorized") };
-    userProfiles.add(caller, profile);
+  public shared func saveProfile(sessionId : Text, profile : UserProfile) : async () {
+    validateSession(sessionId);
+    userProfilesV2.add(sessionId, profile);
   };
 
-  public shared ({ caller }) func updateInviteCode(newCode : Text) : async () {
-    if (not AccessControl.hasPermission(accessControlState, caller, #admin)) { Runtime.trap("Unauthorized: Only admins can update invite code") };
-    inviteCode := newCode;
+  public query func getStartDate() : async Text { startDate };
+
+  public shared func updateStartDate(sessionId : Text, date : Text) : async () {
+    validateSession(sessionId);
+    startDate := date;
   };
 
-  public shared ({ caller }) func updateStartDate(newDate : Text) : async () {
-    if (not AccessControl.hasPermission(accessControlState, caller, #user)) { Runtime.trap("Unauthorized") };
-    startDate := newDate;
+  public shared func submitCheckIn(sessionId : Text, date : Text, emotion : CheckIn.Emotion) : async () {
+    validateSession(sessionId);
+    let filtered = checkInsV2.filter(func(ci) { ci.sessionId != sessionId or ci.date != date });
+    checkInsV2.clear();
+    checkInsV2.addAll(filtered.values());
+    checkInsV2.add({ sessionId; date; emotion });
   };
 
-  public query ({ caller }) func getStartDate() : async Text {
-    if (not AccessControl.hasPermission(accessControlState, caller, #user)) { Runtime.trap("Unauthorized") };
-    startDate;
+  public query func getTodayCheckIns(date : Text) : async [CheckIn.T] {
+    checkInsV2.filter(func(ci) { ci.date == date }).toArray();
   };
 
-  public shared ({ caller }) func registerWithInviteCode(code : Text, profile : UserProfile) : async () {
-    if (code != inviteCode) { Runtime.trap("Invalid invite code") };
-    if (userProfiles.containsKey(caller)) { Runtime.trap("User is already registered") };
-    let currentCount = countUsers();
-    if (currentCount >= 3) { Runtime.trap("Maximum number of users (3) already registered") };
-    let isFirst = currentCount == 0;
-    userProfiles.add(caller, profile);
-    if (isFirst) {
-      AccessControl.assignRole(accessControlState, caller, caller, #admin);
-    } else {
-      AccessControl.assignRole(accessControlState, caller, caller, #user);
-    };
-  };
-
-  public shared ({ caller }) func submitCheckIn(date : Text, emotion : CheckIn.Emotion) : async () {
-    if (not AccessControl.hasPermission(accessControlState, caller, #user)) { Runtime.trap("Unauthorized") };
-    let filtered = checkIns.filter(func(ci) { ci.userId != caller.toBlob() or ci.date != date });
-    checkIns.clear();
-    checkIns.addAll(filtered.values());
-    checkIns.add({ userId = caller.toBlob(); date; emotion });
-  };
-
-  public query ({ caller }) func getTodayCheckIns(date : Text) : async [CheckIn.T] {
-    if (not AccessControl.hasPermission(accessControlState, caller, #user)) { Runtime.trap("Unauthorized") };
-    checkIns.filter(func(ci) { ci.date == date }).toArray();
-  };
-
-  public query ({ caller }) func getUserCheckIn(date : Text) : async ?CheckIn.T {
-    if (not AccessControl.hasPermission(accessControlState, caller, #user)) { Runtime.trap("Unauthorized") };
-    switch (checkIns.values().find(func(ci) { ci.userId == caller.toBlob() and ci.date == date })) {
+  public query func getUserCheckIn(sessionId : Text, date : Text) : async ?CheckIn.T {
+    switch (checkInsV2.values().find(func(ci) { ci.sessionId == sessionId and ci.date == date })) {
       case (?ci) { ?ci }; case (null) { null };
     };
   };
 
-  public query ({ caller }) func getDailyPrompt(dayOfYear : Nat) : async Text {
-    if (not AccessControl.hasPermission(accessControlState, caller, #user)) { Runtime.trap("Unauthorized") };
+  public query func getDailyPrompt(dayOfYear : Nat) : async Text {
     promptArray[dayOfYear % promptArray.size()];
   };
 
-  public shared ({ caller }) func sendMessage(authorName : Text, text : Text) : async Message.T {
-    if (not AccessControl.hasPermission(accessControlState, caller, #user)) { Runtime.trap("Unauthorized") };
+  public shared func sendMessage(sessionId : Text, authorName : Text, text : Text) : async Message.T {
+    validateSession(sessionId);
     let message : Message.T = {
-      id = _messageId; authorId = caller.toBlob(); authorName; text;
+      id = _messageId; authorId = sessionId; authorName; text;
       timestamp = Time.now(); reactions = [];
     };
-    messages.add(message);
+    messagesV2.add(message);
     _messageId += 1;
     message;
   };
 
-  public shared ({ caller }) func addReaction(messageId : Nat, emoji : Text) : async () {
-    if (not AccessControl.hasPermission(accessControlState, caller, #user)) { Runtime.trap("Unauthorized") };
-    let arr = messages.toArray();
+  public shared func addReaction(sessionId : Text, messageId : Nat, emoji : Text) : async () {
+    validateSession(sessionId);
+    let arr = messagesV2.toArray();
     switch (arr.findIndex(func(m) { m.id == messageId })) {
       case (null) { Runtime.trap("Message not found") };
       case (?idx) {
         let msg = arr[idx];
-        if (not msg.reactions.find(func(r) { r.emoji == emoji and r.userId == caller.toBlob() }).isNull()) {
+        if (not msg.reactions.find(func(r) { r.emoji == emoji and r.sessionId == sessionId }).isNull()) {
           Runtime.trap("Reaction already exists");
         };
         let updated : Message.T = { id = msg.id; authorId = msg.authorId; authorName = msg.authorName;
           text = msg.text; timestamp = msg.timestamp;
-          reactions = msg.reactions.concat([{ emoji; userId = caller.toBlob() }]) };
-        messages.clear();
-        for (i in arr.keys()) { if (i == idx) { messages.add(updated) } else { messages.add(arr[i]) } };
+          reactions = msg.reactions.concat([{ emoji; sessionId }]) };
+        messagesV2.clear();
+        for (i in arr.keys()) { if (i == idx) { messagesV2.add(updated) } else { messagesV2.add(arr[i]) } };
       };
     };
   };
 
-  public shared ({ caller }) func removeReaction(messageId : Nat, emoji : Text) : async () {
-    if (not AccessControl.hasPermission(accessControlState, caller, #user)) { Runtime.trap("Unauthorized") };
-    let arr = messages.toArray();
+  public shared func removeReaction(sessionId : Text, messageId : Nat, emoji : Text) : async () {
+    validateSession(sessionId);
+    let arr = messagesV2.toArray();
     switch (arr.findIndex(func(m) { m.id == messageId })) {
       case (null) { Runtime.trap("Message not found") };
       case (?idx) {
         let msg = arr[idx];
         let updated : Message.T = { id = msg.id; authorId = msg.authorId; authorName = msg.authorName;
           text = msg.text; timestamp = msg.timestamp;
-          reactions = msg.reactions.filter(func(r) { not (r.emoji == emoji and r.userId == caller.toBlob()) }) };
-        messages.clear();
-        for (i in arr.keys()) { if (i == idx) { messages.add(updated) } else { messages.add(arr[i]) } };
+          reactions = msg.reactions.filter(func(r) { not (r.emoji == emoji and r.sessionId == sessionId) }) };
+        messagesV2.clear();
+        for (i in arr.keys()) { if (i == idx) { messagesV2.add(updated) } else { messagesV2.add(arr[i]) } };
       };
     };
   };
 
-  public query ({ caller }) func getMessages() : async [Message.T] {
-    if (not AccessControl.hasPermission(accessControlState, caller, #user)) { Runtime.trap("Unauthorized") };
-    messages.toArray().sort();
+  public query func getMessages() : async [Message.T] {
+    messagesV2.toArray().sort();
   };
 
-  public shared ({ caller }) func createMemory(authorName : Text, title : Text, description : ?Text, blobId : ?Text) : async Memory.T {
-    if (not AccessControl.hasPermission(accessControlState, caller, #user)) { Runtime.trap("Unauthorized") };
+  public shared func createMemory(sessionId : Text, authorName : Text, title : Text, description : ?Text, blobId : ?Text) : async Memory.T {
+    validateSession(sessionId);
     let memory : Memory.T = {
-      id = _memoryId; authorId = caller.toBlob(); authorName; title;
+      id = _memoryId; authorId = sessionId; authorName; title;
       description; blobId; timestamp = Time.now();
     };
-    memories.add(memory);
+    memoriesV2.add(memory);
     _memoryId += 1;
     memory;
   };
 
-  public shared ({ caller }) func deleteMemory(memoryId : Nat) : async () {
-    if (not AccessControl.hasPermission(accessControlState, caller, #user)) { Runtime.trap("Unauthorized") };
-    switch (memories.values().find(func(m) { m.id == memoryId })) {
+  public shared func deleteMemory(sessionId : Text, memoryId : Nat) : async () {
+    validateSession(sessionId);
+    switch (memoriesV2.values().find(func(m) { m.id == memoryId })) {
       case (null) { Runtime.trap("Memory not found") };
       case (?mem) {
-        if (mem.authorId != caller.toBlob()) { Runtime.trap("Unauthorized: only author can delete") };
-        let filtered = memories.filter(func(m) { m.id != memoryId });
-        memories.clear();
-        memories.addAll(filtered.values());
+        if (mem.authorId != sessionId) { Runtime.trap("Unauthorized: only author can delete") };
+        let filtered = memoriesV2.filter(func(m) { m.id != memoryId });
+        memoriesV2.clear();
+        memoriesV2.addAll(filtered.values());
       };
     };
   };
 
-  public query ({ caller }) func getMemories() : async [Memory.T] {
-    if (not AccessControl.hasPermission(accessControlState, caller, #user)) { Runtime.trap("Unauthorized") };
-    memories.toArray().sort();
-  };
-
-  public query ({ caller }) func getBlobLink(blobId : Text) : async ?Text {
-    if (not AccessControl.hasPermission(accessControlState, caller, #user)) { Runtime.trap("Unauthorized") };
-    storage.get(blobId);
+  public query func getMemories() : async [Memory.T] {
+    memoriesV2.toArray().sort();
   };
 };
