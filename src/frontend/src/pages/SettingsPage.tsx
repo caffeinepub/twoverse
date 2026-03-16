@@ -1,14 +1,16 @@
-import { LogOut } from "lucide-react";
+import { Check, LogOut, Palette } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
+import { THEMES, useTheme } from "../contexts/ThemeContext";
 import { useActor } from "../hooks/useActor";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
 
 export function SettingsPage() {
   const { actor } = useActor();
   const { clear } = useInternetIdentity();
+  const { theme: activeTheme, setTheme } = useTheme();
   const [startDate, setStartDate] = useState("");
   const [inviteCode, setInviteCode] = useState("");
   const [displayName, setDisplayName] = useState("");
@@ -39,6 +41,7 @@ export function SettingsPage() {
 
   return (
     <div className="px-4 py-4 max-w-lg mx-auto flex flex-col gap-5">
+      {/* Display Name */}
       <div className="bg-white rounded-2xl p-5 shadow-sm border border-pink-100">
         <div className="text-xs font-semibold text-pink-400 uppercase tracking-widest mb-3">
           Display Name
@@ -72,6 +75,7 @@ export function SettingsPage() {
         </Button>
       </div>
 
+      {/* Start Date */}
       <div className="bg-white rounded-2xl p-5 shadow-sm border border-pink-100">
         <div className="text-xs font-semibold text-pink-400 uppercase tracking-widest mb-3">
           Start Date
@@ -102,6 +106,7 @@ export function SettingsPage() {
         </Button>
       </div>
 
+      {/* Invite Code */}
       <div className="bg-white rounded-2xl p-5 shadow-sm border border-pink-100">
         <div className="text-xs font-semibold text-pink-400 uppercase tracking-widest mb-3">
           Invite Code
@@ -132,6 +137,71 @@ export function SettingsPage() {
               ? "Saved ✓"
               : "Update Invite Code"}
         </Button>
+      </div>
+
+      {/* Customize Theme */}
+      <div className="bg-white rounded-2xl p-5 shadow-sm border border-pink-100">
+        <div className="flex items-center gap-2 mb-1">
+          <Palette size={14} className="text-pink-400" />
+          <div className="text-xs font-semibold text-pink-400 uppercase tracking-widest">
+            Customize Theme
+          </div>
+        </div>
+        <p className="text-xs text-gray-400 mb-4">
+          Choose your app&apos;s look &amp; feel
+        </p>
+        <div className="grid grid-cols-2 gap-3">
+          {THEMES.map((t, i) => {
+            const isActive = activeTheme.id === t.id;
+            return (
+              <button
+                type="button"
+                key={t.id}
+                data-ocid={`settings.theme_card.${i + 1}`}
+                onClick={() => setTheme(t.id)}
+                className={[
+                  "relative rounded-xl p-3 border-2 text-left transition-all duration-200 cursor-pointer",
+                  isActive
+                    ? "border-pink-400 shadow-md scale-[1.02]"
+                    : "border-gray-100 hover:border-pink-200 hover:shadow-sm",
+                ].join(" ")}
+                style={{ background: t.gradient }}
+              >
+                {/* Color swatches */}
+                <div className="flex gap-1.5 mb-2">
+                  {t.preview.map((color) => (
+                    <span
+                      key={color}
+                      className="w-4 h-4 rounded-full border border-white/50 shadow-sm flex-shrink-0"
+                      style={{ background: color }}
+                    />
+                  ))}
+                </div>
+                {/* Name & description */}
+                <p
+                  className="text-xs font-bold leading-tight"
+                  style={{ color: t.isDark ? "#e2e8f0" : "#374151" }}
+                >
+                  {t.name}
+                </p>
+                <p
+                  className="text-[10px] leading-tight mt-0.5"
+                  style={{
+                    color: t.isDark ? "rgba(226,232,240,0.6)" : "#9ca3af",
+                  }}
+                >
+                  {t.description}
+                </p>
+                {/* Active checkmark */}
+                {isActive && (
+                  <span className="absolute top-2 right-2 w-5 h-5 rounded-full bg-pink-400 flex items-center justify-center shadow">
+                    <Check size={11} className="text-white" strokeWidth={3} />
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       <Button

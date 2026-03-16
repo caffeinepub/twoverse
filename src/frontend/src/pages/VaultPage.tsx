@@ -11,10 +11,21 @@ import {
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Textarea } from "../components/ui/textarea";
+import { loadConfig } from "../config";
 import { useActor } from "../hooks/useActor";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
 import { useStorageUpload } from "../hooks/useStorageUpload";
-import { formatDate } from "../lib/utils";
+import { formatDate } from "../lib/helpers";
+
+const SENTINEL = "!caf!";
+
+async function getBlobUrl(blobId: string): Promise<string> {
+  const config = await loadConfig();
+  const hash = blobId.startsWith(SENTINEL)
+    ? blobId.substring(SENTINEL.length)
+    : blobId;
+  return `${config.storage_gateway_url}/v1/blob/?blob_hash=${encodeURIComponent(hash)}&owner_id=${encodeURIComponent(config.backend_canister_id)}&project_id=${encodeURIComponent(config.project_id)}`;
+}
 
 export function VaultPage() {
   const { actor } = useActor();
@@ -39,12 +50,18 @@ export function VaultPage() {
     const mems = await actor.getMemories();
     setMemories(mems);
     const urls: Record<string, string> = {};
-    for (const m of mems) {
-      if (m.blobId) {
-        const url = await actor.getBlobLink(m.blobId);
-        if (url) urls[m.blobId] = url;
-      }
-    }
+    await Promise.all(
+      mems
+        .filter((m) => !!m.blobId)
+        .map(async (m) => {
+          try {
+            const url = await getBlobUrl(m.blobId as string);
+            urls[m.blobId as string] = url;
+          } catch {
+            // skip if URL construction fails
+          }
+        }),
+    );
     setPhotoUrls(urls);
   }, [actor]);
 
@@ -109,7 +126,7 @@ export function VaultPage() {
           {memories.length} {memories.length === 1 ? "memory" : "memories"}
         </span>
         <Button
-          data-ocid="vault.add_memory_button"
+          data-ocid="vault.open_modal_button"
           onClick={() => setOpen(true)}
           size="sm"
           className="bg-pink-400 hover:bg-pink-500 text-white rounded-xl gap-1"
@@ -119,7 +136,10 @@ export function VaultPage() {
       </div>
 
       {loading ? (
-        <div className="flex justify-center py-10">
+        <div
+          className="flex justify-center py-10"
+          data-ocid="vault.loading_state"
+        >
           <div className="w-8 h-8 border-2 border-pink-300 border-t-transparent rounded-full animate-spin" />
         </div>
       ) : memories.length === 0 ? (
@@ -178,15 +198,20 @@ export function VaultPage() {
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent
-          data-ocid="vault.add_memory_dialog"
-          className="rounded-2xl border-pink-100 max-w-sm mx-auto"
+          data-ocid="vault.dialog"
+          className="rounded-2xl border-pink-100 max-w-sm mx-auto !bg-white"
+          style={{ backgroundColor: "#ffffff", color: "#1f2937" }}
         >
           <DialogHeader>
-            <DialogTitle className="text-gray-800">New Memory</DialogTitle>
+            <DialogTitle style={{ color: "#1f2937" }}>New Memory</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 pt-2">
             <div>
-              <Label htmlFor="mem-title" className="text-xs text-gray-500">
+              <Label
+                htmlFor="mem-title"
+                className="text-xs"
+                style={{ color: "#6b7280" }}
+              >
                 Title *
               </Label>
               <Input
@@ -196,30 +221,38 @@ export function VaultPage() {
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="Give this memory a name"
                 className="mt-1 rounded-xl border-pink-200"
+                style={{ backgroundColor: "#fff", color: "#1f2937" }}
               />
             </div>
             <div>
-              <Label htmlFor="mem-desc" className="text-xs text-gray-500">
+              <Label
+                htmlFor="mem-desc"
+                className="text-xs"
+                style={{ color: "#6b7280" }}
+              >
                 Description
               </Label>
               <Textarea
                 id="mem-desc"
-                data-ocid="vault.description_input"
+                data-ocid="vault.description_textarea"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="What made this moment special?"
                 className="mt-1 rounded-xl border-pink-200 resize-none"
+                style={{ backgroundColor: "#fff", color: "#1f2937" }}
                 rows={3}
               />
             </div>
             <div>
-              <Label className="text-xs text-gray-500">Photo (optional)</Label>
+              <Label className="text-xs" style={{ color: "#6b7280" }}>
+                Photo (optional)
+              </Label>
               <label
                 data-ocid="vault.upload_button"
                 className="mt-1 flex flex-col items-center justify-center w-full h-24 border-2 border-dashed border-pink-200 rounded-xl cursor-pointer hover:bg-pink-50 transition-colors"
               >
                 <ImageIcon size={20} className="text-pink-300 mb-1" />
-                <span className="text-xs text-gray-400">
+                <span className="text-xs" style={{ color: "#9ca3af" }}>
                   {photo ? photo.name : "Tap to upload a photo"}
                 </span>
                 <input
@@ -238,7 +271,11 @@ export function VaultPage() {
                 />
               </div>
             )}
-            {error && <p className="text-xs text-red-500">{error}</p>}
+            {error && (
+              <p data-ocid="vault.error_state" className="text-xs text-red-500">
+                {error}
+              </p>
+            )}
             <Button
               data-ocid="vault.submit_button"
               onClick={handleAdd}

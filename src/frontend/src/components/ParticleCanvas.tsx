@@ -10,7 +10,13 @@ interface Particle {
   opacityDir: number;
 }
 
-export function ParticleCanvas() {
+interface ParticleCanvasProps {
+  particleColor?: string;
+}
+
+export function ParticleCanvas({
+  particleColor = "249,168,212",
+}: ParticleCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -54,7 +60,7 @@ export function ParticleCanvas() {
         if (p.y > canvas.height) p.y = 0;
         ctx.beginPath();
         ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(249,168,212,${p.opacity})`;
+        ctx.fillStyle = `rgba(${particleColor},${p.opacity})`;
         ctx.fill();
       }
       animId = requestAnimationFrame(draw);
@@ -65,7 +71,7 @@ export function ParticleCanvas() {
       cancelAnimationFrame(animId);
       window.removeEventListener("resize", resize);
     };
-  }, []);
+  }, [particleColor]);
 
   return (
     <canvas

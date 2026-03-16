@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useActor } from "../hooks/useActor";
-import { computeDaysTogether, getNextAnniversary } from "../lib/utils";
+import { computeDaysTogether, getNextAnniversary } from "../lib/helpers";
 
 const MILESTONES = [
   { days: 7, label: "One Week", emoji: "🌸" },

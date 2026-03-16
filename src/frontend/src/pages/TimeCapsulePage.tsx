@@ -188,7 +188,7 @@ export function TimeCapsulePage() {
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent
           data-ocid="capsule.dialog"
-          className="rounded-2xl border-teal-100 max-w-sm mx-auto"
+          className="rounded-2xl border-teal-100 max-w-sm mx-auto bg-white text-gray-800"
         >
           <DialogHeader>
             <DialogTitle className="font-serif">New Time Capsule</DialogTitle>

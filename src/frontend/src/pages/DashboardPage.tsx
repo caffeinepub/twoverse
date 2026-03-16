@@ -9,7 +9,7 @@ import {
   getDayOfYear,
   getNextAnniversary,
   todayStr,
-} from "../lib/utils";
+} from "../lib/helpers";
 
 const emotionEmoji: Record<string, string> = {
   happy: "😊",

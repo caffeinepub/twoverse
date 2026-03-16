@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { Emotion } from "../backend.d";
 import { useActor } from "../hooks/useActor";
-import { cn, getDayOfYear, todayStr } from "../lib/utils";
+import { getDayOfYear, todayStr } from "../lib/helpers";
+import { cn } from "../lib/utils";
 
 const emotions: { value: Emotion; label: string; emoji: string }[] = [
   { value: Emotion.happy, label: "Happy", emoji: "😊" },

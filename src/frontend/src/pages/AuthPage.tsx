@@ -7,17 +7,29 @@ import { Label } from "../components/ui/label";
 import { useActor } from "../hooks/useActor";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
 
-export function AuthPage() {
-  const { login, isLoggingIn } = useInternetIdentity();
+interface AuthPageProps {
+  defaultTab?: "login" | "register";
+  sessionExpired?: boolean;
+}
+
+export function AuthPage({
+  defaultTab = "login",
+  sessionExpired = false,
+}: AuthPageProps) {
+  const { login, isLoggingIn, identity } = useInternetIdentity();
   const { actor } = useActor();
-  const [tab, setTab] = useState<"login" | "register">("login");
+  const [tab, setTab] = useState<"login" | "register">(defaultTab);
   const [name, setName] = useState("");
   const [inviteCode, setInviteCode] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState(false);
 
   const handleRegister = async () => {
-    if (!actor) return;
+    if (!actor) {
+      setError("Please sign in with Internet Identity first.");
+      return;
+    }
     if (!name.trim()) {
       setError("Please enter your name.");
       return;
@@ -32,8 +44,23 @@ export function AuthPage() {
       await actor.registerWithInviteCode(inviteCode.trim(), {
         name: name.trim(),
       });
+      setSuccess(true);
+      // Reload to re-check registration
+      setTimeout(() => window.location.reload(), 1200);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Registration failed.");
+      const msg = e instanceof Error ? e.message : "Registration failed.";
+      // Make common backend error messages friendlier
+      if (msg.includes("Invalid invite code") || msg.includes("invite")) {
+        setError(
+          "That invite code isn't valid. Please double-check and try again.",
+        );
+      } else if (msg.includes("already registered")) {
+        setError("This account is already registered. Try signing in.");
+      } else if (msg.includes("full") || msg.includes("limit")) {
+        setError("This TwoVerse is full — only 3 members allowed.");
+      } else {
+        setError(msg);
+      }
     } finally {
       setLoading(false);
     }
@@ -55,10 +82,18 @@ export function AuthPage() {
           </p>
         </div>
 
+        {sessionExpired && (
+          <div className="mb-4 px-4 py-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-700 text-sm text-center">
+            Your session data was reset. Please re-join with your invite code to
+            restore access.
+          </div>
+        )}
+
         <div className="bg-white rounded-2xl shadow-sm border border-pink-100 p-6">
           <div className="flex rounded-xl bg-pink-50 p-1 mb-6">
             <button
               type="button"
+              data-ocid="auth.login.tab"
               onClick={() => {
                 setTab("login");
                 setError("");
@@ -73,6 +108,7 @@ export function AuthPage() {
             </button>
             <button
               type="button"
+              data-ocid="auth.register.tab"
               onClick={() => {
                 setTab("register");
                 setError("");
@@ -105,6 +141,12 @@ export function AuthPage() {
             </div>
           ) : (
             <div className="space-y-4">
+              {!identity && (
+                <div className="rounded-xl bg-pink-50 border border-pink-100 px-3 py-2 text-xs text-pink-600 text-center">
+                  Sign in with Internet Identity first, then fill in your
+                  details below.
+                </div>
+              )}
               <div>
                 <Label htmlFor="reg-name" className="text-xs text-gray-500">
                   Your Name
@@ -131,26 +173,45 @@ export function AuthPage() {
                   className="mt-1 rounded-xl border-pink-200"
                 />
               </div>
-              {error && <p className="text-xs text-red-500">{error}</p>}
+              {error && (
+                <p
+                  data-ocid="auth.error_state"
+                  className="text-xs text-red-500"
+                >
+                  {error}
+                </p>
+              )}
+              {success && (
+                <p
+                  data-ocid="auth.success_state"
+                  className="text-xs text-green-600 text-center"
+                >
+                  ✓ Joined! Loading your world…
+                </p>
+              )}
               <Button
                 data-ocid="auth.register_button"
                 onClick={handleRegister}
-                disabled={loading || isLoggingIn}
+                disabled={loading || success}
                 className="w-full bg-pink-400 hover:bg-pink-500 text-white rounded-xl"
               >
-                {loading ? "Joining..." : "Join TwoVerse"}
+                {loading
+                  ? "Joining..."
+                  : success
+                    ? "Welcome! ✨"
+                    : "Join TwoVerse"}
               </Button>
-              <p className="text-xs text-gray-400 text-center">
-                You'll need to sign in with Internet Identity first.
-              </p>
-              <Button
-                variant="ghost"
-                onClick={login}
-                disabled={isLoggingIn}
-                className="w-full text-pink-400 hover:text-pink-500"
-              >
-                {isLoggingIn ? "Opening..." : "Open Internet Identity"}
-              </Button>
+              {!identity && (
+                <Button
+                  variant="ghost"
+                  data-ocid="auth.identity_button"
+                  onClick={login}
+                  disabled={isLoggingIn}
+                  className="w-full text-pink-400 hover:text-pink-500"
+                >
+                  {isLoggingIn ? "Opening..." : "Open Internet Identity"}
+                </Button>
+              )}
             </div>
           )}
         </div>

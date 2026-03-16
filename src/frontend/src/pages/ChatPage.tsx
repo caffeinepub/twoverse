@@ -6,7 +6,7 @@ import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { useActor } from "../hooks/useActor";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
-import { formatTimestamp } from "../lib/utils";
+import { formatTimestamp } from "../lib/helpers";
 
 const QUICK_EMOJIS = ["❤️", "😘", "🥰", "💕", "😊"];
 const REACTION_EMOJIS = ["❤️", "😘", "🥰", "💕", "😊", "😂", "🤗", "💖"];

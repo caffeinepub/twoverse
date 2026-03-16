@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import { Emotion } from "../backend.d";
 import { useActor } from "../hooks/useActor";
-import { todayStr } from "../lib/utils";
+import { todayStr } from "../lib/helpers";
 
 const emotionConfig: Record<
   Emotion,
