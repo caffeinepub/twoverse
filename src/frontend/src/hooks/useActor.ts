@@ -1,33 +1,56 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import type { backendInterface } from "../backend";
 import { createActorWithConfig } from "../config";
 
-const ACTOR_QUERY_KEY = "actor";
+// Module-level cache so actor is shared across all components and created only once
+let _actor: backendInterface | null = null;
+let _promise: Promise<backendInterface> | null = null;
+const _listeners: Set<(a: backendInterface) => void> = new Set();
+
+function getOrCreateActor(): Promise<backendInterface> {
+  if (_actor) return Promise.resolve(_actor);
+  if (_promise) return _promise;
+  _promise = createActorWithConfig()
+    .then((a) => {
+      _actor = a;
+      for (const fn of _listeners) {
+        fn(a);
+      }
+      _listeners.clear();
+      return a;
+    })
+    .catch((err) => {
+      _promise = null; // allow retry
+      throw err;
+    });
+  return _promise;
+}
 
 export function useActor() {
-  const queryClient = useQueryClient();
-  const actorQuery = useQuery<backendInterface>({
-    queryKey: [ACTOR_QUERY_KEY],
-    queryFn: async () => {
-      return await createActorWithConfig();
-    },
-    staleTime: Number.POSITIVE_INFINITY,
-  });
+  const [actor, setActor] = useState<backendInterface | null>(_actor);
+  const [isFetching, setIsFetching] = useState(!_actor);
 
   useEffect(() => {
-    if (actorQuery.data) {
-      queryClient.invalidateQueries({
-        predicate: (query) => !query.queryKey.includes(ACTOR_QUERY_KEY),
-      });
-      queryClient.refetchQueries({
-        predicate: (query) => !query.queryKey.includes(ACTOR_QUERY_KEY),
-      });
+    if (_actor) {
+      setActor(_actor);
+      setIsFetching(false);
+      return;
     }
-  }, [actorQuery.data, queryClient]);
+    setIsFetching(true);
+    const listener = (a: backendInterface) => {
+      setActor(a);
+      setIsFetching(false);
+    };
+    _listeners.add(listener);
+    getOrCreateActor().catch((err) => {
+      console.error("Failed to create backend actor:", err);
+      setIsFetching(false);
+      _listeners.delete(listener);
+    });
+    return () => {
+      _listeners.delete(listener);
+    };
+  }, []);
 
-  return {
-    actor: actorQuery.data || null,
-    isFetching: actorQuery.isFetching,
-  };
+  return { actor, isFetching };
 }

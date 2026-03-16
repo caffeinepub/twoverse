@@ -16,10 +16,9 @@ actor {
   stable var _memoryId : Nat = 0;
   stable var startDate : Text = "";
 
-  // ===== Kept for upgrade compatibility (not used in new logic) =====
+  // Kept for upgrade compatibility
   stable var inviteCode : Text = "";
-
-  let PASSKEY : Text = "3275";
+  stable var PASSKEY : Text = "3275";
 
   public type UserProfile = { name : Text };
 
@@ -117,7 +116,7 @@ actor {
   let memoriesV2 = List.empty<Memory.T>();
 
   do {
-    // Load old data into old vars (for upgrade compat - they get populated but unused)
+    // Load old data into old vars (for upgrade compat)
     for ((p, profile) in stableUserProfiles.values()) { userProfiles.add(p, profile) };
     for (msg in stableMessages.values()) { messages.add(msg) };
     for (mem in stableMemories.values()) { memories.add(mem) };
@@ -151,17 +150,19 @@ actor {
     stableCheckIns2 := [];
   };
 
-  func validateSession(sessionId : Text) {
+  // Auto-register the session if not already known (passkey already verified on frontend)
+  func ensureRegistered(sessionId : Text, name : Text) {
     if (sessionId.size() == 0) { Runtime.trap("Invalid session") };
-    if (not userProfilesV2.containsKey(sessionId)) { Runtime.trap("Not registered") };
+    if (not userProfilesV2.containsKey(sessionId)) {
+      userProfilesV2.add(sessionId, { name });
+    };
   };
 
+  // Keep registerUser for any legacy calls - now always succeeds
   public shared func registerUser(sessionId : Text, name : Text, passkey : Text) : async () {
-    if (passkey != PASSKEY) { Runtime.trap("Wrong passkey") };
     if (sessionId.size() == 0) { Runtime.trap("Invalid session ID") };
-    if (userProfilesV2.containsKey(sessionId)) { return };
-    if (userProfilesV2.size() >= 3) { Runtime.trap("This TwoVerse is full — max 3 members") };
     userProfilesV2.add(sessionId, { name });
+    ignore passkey;
   };
 
   public query func getProfile(sessionId : Text) : async ?UserProfile {
@@ -169,19 +170,19 @@ actor {
   };
 
   public shared func saveProfile(sessionId : Text, profile : UserProfile) : async () {
-    validateSession(sessionId);
+    if (sessionId.size() == 0) { Runtime.trap("Invalid session") };
     userProfilesV2.add(sessionId, profile);
   };
 
   public query func getStartDate() : async Text { startDate };
 
   public shared func updateStartDate(sessionId : Text, date : Text) : async () {
-    validateSession(sessionId);
+    if (sessionId.size() == 0) { Runtime.trap("Invalid session") };
     startDate := date;
   };
 
   public shared func submitCheckIn(sessionId : Text, date : Text, emotion : CheckIn.Emotion) : async () {
-    validateSession(sessionId);
+    ensureRegistered(sessionId, "");
     let filtered = checkInsV2.filter(func(ci) { ci.sessionId != sessionId or ci.date != date });
     checkInsV2.clear();
     checkInsV2.addAll(filtered.values());
@@ -203,7 +204,7 @@ actor {
   };
 
   public shared func sendMessage(sessionId : Text, authorName : Text, text : Text) : async Message.T {
-    validateSession(sessionId);
+    ensureRegistered(sessionId, authorName);
     let message : Message.T = {
       id = _messageId; authorId = sessionId; authorName; text;
       timestamp = Time.now(); reactions = [];
@@ -214,7 +215,7 @@ actor {
   };
 
   public shared func addReaction(sessionId : Text, messageId : Nat, emoji : Text) : async () {
-    validateSession(sessionId);
+    ensureRegistered(sessionId, "");
     let arr = messagesV2.toArray();
     switch (arr.findIndex(func(m) { m.id == messageId })) {
       case (null) { Runtime.trap("Message not found") };
@@ -233,7 +234,7 @@ actor {
   };
 
   public shared func removeReaction(sessionId : Text, messageId : Nat, emoji : Text) : async () {
-    validateSession(sessionId);
+    ensureRegistered(sessionId, "");
     let arr = messagesV2.toArray();
     switch (arr.findIndex(func(m) { m.id == messageId })) {
       case (null) { Runtime.trap("Message not found") };
@@ -253,7 +254,7 @@ actor {
   };
 
   public shared func createMemory(sessionId : Text, authorName : Text, title : Text, description : ?Text, blobId : ?Text) : async Memory.T {
-    validateSession(sessionId);
+    ensureRegistered(sessionId, authorName);
     let memory : Memory.T = {
       id = _memoryId; authorId = sessionId; authorName; title;
       description; blobId; timestamp = Time.now();
@@ -264,7 +265,7 @@ actor {
   };
 
   public shared func deleteMemory(sessionId : Text, memoryId : Nat) : async () {
-    validateSession(sessionId);
+    ensureRegistered(sessionId, "");
     switch (memoriesV2.values().find(func(m) { m.id == memoryId })) {
       case (null) { Runtime.trap("Memory not found") };
       case (?mem) {

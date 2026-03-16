@@ -22,8 +22,12 @@ export function ChatPage() {
 
   const loadMessages = useCallback(async () => {
     if (!actor) return;
-    const msgs = await actor.getMessages();
-    setMessages(msgs);
+    try {
+      const msgs = await actor.getMessages();
+      setMessages(msgs);
+    } catch (err) {
+      console.error("Failed to load messages:", err);
+    }
   }, [actor]);
 
   useEffect(() => {
@@ -48,6 +52,9 @@ export function ChatPage() {
       const msg = await actor.sendMessage(sessionId, userName, text.trim());
       setMessages((prev) => [...prev, msg]);
       setText("");
+    } catch (err) {
+      toast.error("Failed to send message. Please try again.");
+      console.error(err);
     } finally {
       setSending(false);
     }
@@ -62,12 +69,17 @@ export function ChatPage() {
     already: boolean,
   ) => {
     if (!actor) return;
-    if (already) {
-      await actor.removeReaction(sessionId, msgId, emoji);
-    } else {
-      await actor.addReaction(sessionId, msgId, emoji);
+    try {
+      if (already) {
+        await actor.removeReaction(sessionId, msgId, emoji);
+      } else {
+        await actor.addReaction(sessionId, msgId, emoji);
+      }
+      await loadMessages();
+    } catch (err) {
+      toast.error("Failed to update reaction.");
+      console.error(err);
     }
-    await loadMessages();
     setOpenReactionFor(null);
   };
 

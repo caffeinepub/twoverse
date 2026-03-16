@@ -5,10 +5,12 @@ import {
   createRouter,
 } from "@tanstack/react-router";
 import { Heart } from "lucide-react";
+import { Toaster } from "sonner";
 import { BottomNav } from "./components/BottomNav";
 import { ParticleCanvas } from "./components/ParticleCanvas";
 import { LocalAuthProvider, useLocalAuth } from "./contexts/LocalAuthContext";
 import { ThemeProvider, useTheme } from "./contexts/ThemeContext";
+import { useActor } from "./hooks/useActor";
 import { AnalyticsPage } from "./pages/AnalyticsPage";
 import { AnniversaryPage } from "./pages/AnniversaryPage";
 import { AuthPage } from "./pages/AuthPage";
@@ -205,9 +207,14 @@ function LoadingScreen({ message }: { message: string }) {
 
 function AppContent() {
   const { isAuthenticated } = useLocalAuth();
+  const { actor, isFetching } = useActor();
 
   if (!isAuthenticated) {
     return <AuthPage />;
+  }
+
+  if (isFetching || !actor) {
+    return <LoadingScreen message="Connecting to TwoVerse..." />;
   }
 
   return <RouterProvider router={router} />;
@@ -218,6 +225,7 @@ export default function App() {
     <ThemeProvider>
       <LocalAuthProvider>
         <AppContent />
+        <Toaster position="top-center" richColors />
       </LocalAuthProvider>
     </ThemeProvider>
   );

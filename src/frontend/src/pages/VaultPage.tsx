@@ -1,5 +1,6 @@
 import { ImageIcon, Plus, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
+import { toast } from "sonner";
 import type { T__2 as Memory } from "../backend.d";
 import { Button } from "../components/ui/button";
 import {
@@ -44,22 +45,26 @@ export function VaultPage() {
 
   const loadMemories = useCallback(async () => {
     if (!actor) return;
-    const mems = await actor.getMemories();
-    setMemories(mems);
-    const urls: Record<string, string> = {};
-    await Promise.all(
-      mems
-        .filter((m) => !!m.blobId)
-        .map(async (m) => {
-          try {
-            const url = await getBlobUrl(m.blobId as string);
-            urls[m.blobId as string] = url;
-          } catch {
-            // skip
-          }
-        }),
-    );
-    setPhotoUrls(urls);
+    try {
+      const mems = await actor.getMemories();
+      setMemories(mems);
+      const urls: Record<string, string> = {};
+      await Promise.all(
+        mems
+          .filter((m) => !!m.blobId)
+          .map(async (m) => {
+            try {
+              const url = await getBlobUrl(m.blobId as string);
+              urls[m.blobId as string] = url;
+            } catch {
+              // skip
+            }
+          }),
+      );
+      setPhotoUrls(urls);
+    } catch (err) {
+      console.error("Failed to load memories:", err);
+    }
   }, [actor]);
 
   useEffect(() => {
@@ -102,8 +107,12 @@ export function VaultPage() {
 
   const handleDelete = async (id: bigint) => {
     if (!actor || !sessionId) return;
-    await actor.deleteMemory(sessionId, id);
-    await loadMemories();
+    try {
+      await actor.deleteMemory(sessionId, id);
+      await loadMemories();
+    } catch {
+      toast.error("Failed to delete memory.");
+    }
   };
 
   const isOwn = (mem: Memory) => mem.authorId === sessionId;

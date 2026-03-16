@@ -1,5 +1,6 @@
 import { Check, LogOut, Palette } from "lucide-react";
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
@@ -17,6 +18,10 @@ export function SettingsPage() {
   const [success, setSuccess] = useState<string | null>(null);
 
   useEffect(() => {
+    setDisplayName(authName);
+  }, [authName]);
+
+  useEffect(() => {
     if (!actor) return;
     actor.getStartDate().then((date) => {
       setStartDate(date || "");
@@ -30,6 +35,9 @@ export function SettingsPage() {
       await fn();
       setSuccess(section);
       setTimeout(() => setSuccess(null), 2000);
+    } catch (err) {
+      console.error("Save failed:", err);
+      toast.error("Failed to save. Please try again.");
     } finally {
       setSaving(null);
     }

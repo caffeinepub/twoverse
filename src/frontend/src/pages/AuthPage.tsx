@@ -5,24 +5,17 @@ import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { useLocalAuth } from "../contexts/LocalAuthContext";
-import { useActor } from "../hooks/useActor";
 
 const PASSKEY = "3275";
 
 export function AuthPage() {
   const { setAuth } = useLocalAuth();
-  const { actor } = useActor();
   const [name, setName] = useState("");
   const [passkey, setPasskey] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [success, setSuccess] = useState(false);
 
-  const handleLogin = async () => {
-    if (!actor) {
-      setError("App is loading, please try again.");
-      return;
-    }
+  const handleLogin = () => {
     if (!name.trim()) {
       setError("Please enter your name.");
       return;
@@ -33,26 +26,13 @@ export function AuthPage() {
     }
     setError("");
     setLoading(true);
-    try {
-      let sessionId = localStorage.getItem("tv_session_id");
-      if (!sessionId) {
-        sessionId = crypto.randomUUID();
-      }
-      await actor.registerUser(sessionId, name.trim(), passkey);
-      setSuccess(true);
-      setAuth(sessionId, name.trim());
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Login failed.";
-      if (msg.includes("full") || msg.includes("max")) {
-        setError("This TwoVerse is full — only 3 members allowed.");
-      } else if (msg.includes("passkey") || msg.includes("Wrong")) {
-        setError("Wrong passkey. Please try again.");
-      } else {
-        setError(msg);
-      }
-    } finally {
-      setLoading(false);
+
+    let sessionId = localStorage.getItem("tv_session_id");
+    if (!sessionId) {
+      sessionId = crypto.randomUUID();
     }
+
+    setAuth(sessionId, name.trim());
   };
 
   return (
@@ -83,9 +63,12 @@ export function AuthPage() {
                 placeholder="e.g. Yuva"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleLogin()}
+                onKeyDown={(e) =>
+                  e.key === "Enter" && !loading && handleLogin()
+                }
                 className="mt-1 rounded-xl border-pink-200"
                 autoComplete="off"
+                disabled={loading}
               />
             </div>
             <div>
@@ -99,9 +82,12 @@ export function AuthPage() {
                 placeholder="Enter passkey"
                 value={passkey}
                 onChange={(e) => setPasskey(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleLogin()}
+                onKeyDown={(e) =>
+                  e.key === "Enter" && !loading && handleLogin()
+                }
                 className="mt-1 rounded-xl border-pink-200"
                 autoComplete="off"
+                disabled={loading}
               />
             </div>
             {error && (
@@ -109,25 +95,13 @@ export function AuthPage() {
                 {error}
               </p>
             )}
-            {success && (
-              <p
-                data-ocid="auth.success_state"
-                className="text-xs text-green-600 text-center"
-              >
-                Welcome! Loading your world...
-              </p>
-            )}
             <Button
               data-ocid="auth.login_button"
               onClick={handleLogin}
-              disabled={loading || success}
+              disabled={loading}
               className="w-full bg-pink-400 hover:bg-pink-500 text-white rounded-xl"
             >
-              {loading
-                ? "Entering..."
-                : success
-                  ? "Welcome! "
-                  : "Enter TwoVerse"}
+              {loading ? "Entering..." : "Enter TwoVerse"}
             </Button>
           </div>
         </div>

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { toast } from "sonner";
 import { Emotion } from "../backend.d";
 import { useLocalAuth } from "../contexts/LocalAuthContext";
 import { useActor } from "../hooks/useActor";
@@ -25,14 +26,18 @@ export function PromptsPage() {
 
   const load = useCallback(async () => {
     if (!actor || !sessionId) return;
-    const [p, mine, all] = await Promise.all([
-      actor.getDailyPrompt(getDayOfYear(new Date())),
-      actor.getUserCheckIn(sessionId, today),
-      actor.getTodayCheckIns(today),
-    ]);
-    setPrompt(p);
-    setMyCheckIn(mine ? mine.emotion : null);
-    setAllCheckIns(all);
+    try {
+      const [p, mine, all] = await Promise.all([
+        actor.getDailyPrompt(getDayOfYear(new Date())),
+        actor.getUserCheckIn(sessionId, today),
+        actor.getTodayCheckIns(today),
+      ]);
+      setPrompt(p);
+      setMyCheckIn(mine ? mine.emotion : null);
+      setAllCheckIns(all);
+    } catch (err) {
+      console.error("Failed to load check-ins:", err);
+    }
   }, [actor, sessionId, today]);
 
   useEffect(() => {
@@ -47,6 +52,9 @@ export function PromptsPage() {
       setMyCheckIn(emotion);
       const all = await actor.getTodayCheckIns(today);
       setAllCheckIns(all);
+    } catch (err) {
+      toast.error("Failed to submit check-in. Please try again.");
+      console.error(err);
     } finally {
       setSubmitting(false);
     }

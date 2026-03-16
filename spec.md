@@ -1,34 +1,28 @@
 # TwoVerse
 
 ## Current State
-Login requires Internet Identity (II) for authentication, plus an invite code for new users joining. The backend uses the II `caller` principal to identify users and gate all API calls via an authorization mixin.
+App has frontend-only passkey login (name + "3275"), but ALL backend features are broken: messages don't send, settings don't save, all features non-functional. Root causes: useActor depends on Internet Identity initialization timing causing actor to be null; no error feedback shown to users.
 
 ## Requested Changes (Diff)
 
 ### Add
-- Simple passkey login screen: user enters their Name + passkey "3275" to access the app
-- A locally-generated random `sessionId` (UUID stored in localStorage) used as the user's unique identity across sessions
-- Backend `registerUser(sessionId, name, passkey)` function that validates passkey and stores user profile
-- All backend calls use `sessionId: Text` param to identify the caller instead of II principal
-- `useLocalAuth` hook: manages name/sessionId in localStorage, exposes `login(name, passkey)` and `logout()`
+- Error toast notifications for ALL failed backend operations
+- Loading overlay while actor initializes
 
 ### Modify
-- Backend: remove Internet Identity / authorization mixin requirement; replace `caller`-based identity with `sessionId: Text` parameter on all functions
-- Backend: passkey hardcoded as "3275"; registration open to anyone with correct passkey (max 3 users)
-- AuthPage: replace II login + invite code flow with a single form: Name + Passkey fields + "Enter TwoVerse" button
-- App.tsx: replace `useInternetIdentity` + `RegistrationGate` with `useLocalAuth`; show AuthPage if no valid session in localStorage
-- All pages/hooks that call `actor.*` functions: pass `sessionId` as first parameter
+- useActor.ts: rewrite to create anonymous actor directly, no II dependency, module-level cache
+- App.tsx: show loading state while actor initializing after login
+- ChatPage.tsx: add try/catch with error toast in send()
+- SettingsPage.tsx: add error toast when save fails
+- All feature pages: ensure error handling for backend calls
 
 ### Remove
-- Internet Identity login button and flow
-- Invite code field and validation
-- `useInternetIdentity` hook usage in App.tsx and AuthPage
-- Authorization mixin from backend (no longer needed)
-- "Session expired" banner referencing invite code
+- Nothing
 
 ## Implementation Plan
-1. Regenerate backend: replace caller-based auth with sessionId param, add passkey validation, keep all existing features (chat, memories, check-ins, etc.)
-2. Update `useLocalAuth` hook for localStorage session management
-3. Rewrite `AuthPage` with simple name + passkey form
-4. Update `App.tsx` to use `useLocalAuth` instead of `useInternetIdentity`
-5. Update all hooks/pages that call actor functions to pass sessionId
+1. Rewrite useActor.ts - anonymous actor, module-level cache, no II dependency
+2. Update App.tsx - loading screen while actor null after login
+3. Fix ChatPage - error toasts on send failure
+4. Fix SettingsPage - error toasts on save failure
+5. Fix all other pages - error handling
+6. Validate and deploy
