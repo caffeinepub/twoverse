@@ -1,9 +1,8 @@
-import Nat "mo:core/Nat";
+import Map "mo:core/Map";
 import Text "mo:core/Text";
 import Time "mo:core/Time";
 import Array "mo:core/Array";
 import Order "mo:core/Order";
-import Map "mo:core/Map";
 import Iter "mo:core/Iter";
 import List "mo:core/List";
 import Blob "mo:core/Blob";
@@ -12,7 +11,9 @@ import Principal "mo:core/Principal";
 import MixinStorage "blob-storage/Mixin";
 import MixinAuthorization "authorization/MixinAuthorization";
 import AccessControl "authorization/access-control";
+import Migration "migration";
 
+(with migration = Migration.run)
 actor {
   // Persistent State
   var _messageId = 0;
@@ -43,12 +44,13 @@ actor {
 
   var inviteCode = "twvrs23";
   var startDate = "";
+
+  // Initialize the access control state and mixin components
+  let accessControlState = AccessControl.initState();
+  include MixinAuthorization(accessControlState);
+  include MixinStorage();
+
   let storage = Map.empty<Text, Text>();
-
-  public type UserProfile = {
-    name : Text;
-  };
-
   let userProfiles = Map.empty<Principal, UserProfile>();
 
   module CheckIn {
@@ -108,10 +110,9 @@ actor {
     };
   };
 
-  // Initialize the access control state and mixin components
-  let accessControlState = AccessControl.initState();
-  include MixinAuthorization(accessControlState);
-  include MixinStorage();
+  public type UserProfile = {
+    name : Text;
+  };
 
   // Persistent state variables for data storage
   let checkIns = List.empty<CheckIn.T>();
@@ -158,17 +159,17 @@ actor {
     };
   };
 
-  // Couple settings
+  // Couple settings - Admin only
   public shared ({ caller }) func updateInviteCode(newCode : Text) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can update invite code");
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can update invite code");
     };
     inviteCode := newCode;
   };
 
   public shared ({ caller }) func updateStartDate(newDate : Text) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can update start date");
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can update start date");
     };
     startDate := newDate;
   };
@@ -180,7 +181,7 @@ actor {
     startDate;
   };
 
-  // Invite code validation with max user limit
+  // Invite code validation with max user limit - Accessible to guests for registration
   public shared ({ caller }) func registerWithInviteCode(code : Text, profile : UserProfile) : async () {
     if (code != inviteCode) {
       Runtime.trap("Invalid invite code");
@@ -196,6 +197,14 @@ actor {
 
     // Save their profile
     userProfiles.add(caller, profile);
+
+    // Assign user role - first user becomes admin, others become regular users
+    let isFirstUser = countUsers() == 0;
+    if (isFirstUser) {
+      AccessControl.assignRole(accessControlState, caller, caller, #admin);
+    } else {
+      AccessControl.assignRole(accessControlState, caller, caller, #user);
+    };
   };
 
   // Daily check-ins
@@ -317,7 +326,6 @@ actor {
 
         messages.clear();
         messages.addAll(messageList.values());
-        // Removed replaceRange, as it's not needed
       };
     };
   };
@@ -356,7 +364,6 @@ actor {
 
         messages.clear();
         messages.addAll(messageList.values());
-        // Removed replaceRange
       };
     };
   };
@@ -434,3 +441,4 @@ actor {
     storage.get(blobId);
   };
 };
+

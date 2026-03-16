@@ -1,10 +1,15 @@
 import { useNavigate } from "@tanstack/react-router";
-import { Heart } from "lucide-react";
+import { Heart, Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { Emotion } from "../backend.d";
 import { Button } from "../components/ui/button";
 import { useActor } from "../hooks/useActor";
-import { computeDaysTogether, getDayOfYear, todayStr } from "../lib/utils";
+import {
+  computeDaysTogether,
+  getDayOfYear,
+  getNextAnniversary,
+  todayStr,
+} from "../lib/utils";
 
 const emotionEmoji: Record<string, string> = {
   happy: "😊",
@@ -19,24 +24,29 @@ export function DashboardPage() {
   const { actor } = useActor();
   const navigate = useNavigate();
   const [days, setDays] = useState(0);
+  const [startDate, setStartDate] = useState("");
   const [prompt, setPrompt] = useState("");
   const [checkIns, setCheckIns] = useState<
     { emotion: Emotion; date: string }[]
   >([]);
+  const [userName, setUserName] = useState("");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!actor) return;
     const load = async () => {
       try {
-        const [startDate, dailyPrompt, todayCheckIns] = await Promise.all([
+        const [sd, dailyPrompt, todayCheckIns, profile] = await Promise.all([
           actor.getStartDate(),
           actor.getDailyPrompt(getDayOfYear(new Date())),
           actor.getTodayCheckIns(todayStr()),
+          actor.getCallerUserProfile(),
         ]);
-        setDays(computeDaysTogether(startDate));
+        setStartDate(sd);
+        setDays(computeDaysTogether(sd));
         setPrompt(dailyPrompt);
         setCheckIns(todayCheckIns);
+        if (profile) setUserName(profile.name);
       } finally {
         setLoading(false);
       }
@@ -45,17 +55,32 @@ export function DashboardPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [actor]);
 
-  const promptTeaser =
-    prompt.length > 80 ? `${prompt.slice(0, 80)}...` : prompt;
+  const nextAnniv = getNextAnniversary(startDate);
 
   return (
-    <div className="flex flex-col gap-5 py-4 px-4 max-w-lg mx-auto">
+    <div className="flex flex-col gap-4 py-5 px-4 max-w-lg mx-auto">
+      {/* Greeting */}
+      {userName && (
+        <div className="text-center">
+          <p className="text-muted-foreground text-sm">
+            Hello,{" "}
+            <span className="font-serif italic text-pink-500">{userName}</span>{" "}
+            💕
+          </p>
+        </div>
+      )}
+
+      {/* Days Together */}
       <div
         data-ocid="dashboard.days_together"
-        className="bg-gradient-to-br from-pink-50 to-rose-50 rounded-2xl p-6 text-center shadow-sm border border-pink-100"
+        className="bg-gradient-to-br from-pink-50 via-rose-50 to-pink-100/60 rounded-3xl p-7 text-center shadow-soft border border-pink-100"
       >
-        <div className="flex justify-center mb-2">
-          <Heart className="text-pink-400" size={28} fill="currentColor" />
+        <div className="flex justify-center mb-3">
+          <Heart
+            className="text-pink-400 float-heart"
+            size={26}
+            fill="currentColor"
+          />
         </div>
         {loading ? (
           <div className="h-16 flex items-center justify-center">
@@ -63,40 +88,68 @@ export function DashboardPage() {
           </div>
         ) : (
           <>
-            <div className="text-6xl font-bold text-pink-500">{days}</div>
-            <div className="text-sm text-gray-400 mt-1">
+            <div className="text-7xl font-bold text-pink-500 font-serif">
+              {days}
+            </div>
+            <div className="text-xs text-muted-foreground mt-1 font-medium uppercase tracking-widest">
               {days === 1 ? "day together" : "days together"}
             </div>
           </>
         )}
       </div>
 
+      {/* Next Anniversary */}
+      {nextAnniv && (
+        <div className="bg-white rounded-2xl p-4 shadow-soft border border-pink-100 flex items-center gap-3">
+          <div className="text-2xl">🗓</div>
+          <div>
+            <div className="text-xs font-semibold text-pink-400 uppercase tracking-widest">
+              Next Anniversary
+            </div>
+            <div className="text-sm text-foreground font-medium mt-0.5">
+              {nextAnniv.years} year{nextAnniv.years !== 1 ? "s" : ""} — in{" "}
+              <span className="text-pink-500 font-bold">
+                {nextAnniv.daysAway}
+              </span>{" "}
+              {nextAnniv.daysAway === 1 ? "day" : "days"}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Today's Prompt */}
       <div
         data-ocid="dashboard.prompt_teaser"
-        className="bg-white rounded-2xl p-5 shadow-sm border border-pink-100"
+        className="bg-white rounded-2xl p-5 shadow-soft border border-pink-100"
       >
-        <div className="text-xs font-semibold text-pink-400 uppercase tracking-widest mb-2">
-          Today's Prompt
+        <div className="flex items-center gap-2 mb-2">
+          <Sparkles size={12} className="text-pink-400" />
+          <div className="text-xs font-semibold text-pink-400 uppercase tracking-widest">
+            Today's Prompt
+          </div>
         </div>
-        <p className="text-gray-600 text-sm leading-relaxed">
-          {promptTeaser || "Loading..."}
+        <p className="text-foreground text-sm leading-relaxed font-serif italic">
+          {prompt
+            ? `"${prompt.length > 100 ? `${prompt.slice(0, 100)}...` : prompt}"`
+            : "Loading..."}
         </p>
       </div>
 
-      <div className="bg-white rounded-2xl p-5 shadow-sm border border-pink-100">
+      {/* Today's Check-ins */}
+      <div className="bg-white rounded-2xl p-5 shadow-soft border border-pink-100">
         <div className="text-xs font-semibold text-pink-400 uppercase tracking-widest mb-3">
-          Today's Check-ins
+          Group Vibes Today
         </div>
         {checkIns.length === 0 ? (
-          <p className="text-sm text-gray-400 text-center py-2">
+          <p className="text-sm text-muted-foreground text-center py-1">
             No check-ins yet today
           </p>
         ) : (
           <div className="flex flex-wrap gap-2">
-            {checkIns.map((ci) => (
+            {checkIns.map((ci, idx) => (
               <div
-                key={`${ci.date}-${ci.emotion}`}
-                className="flex items-center gap-1.5 bg-pink-50 rounded-full px-3 py-1.5 text-sm text-gray-600"
+                key={`${ci.date}-${ci.emotion}-${idx}`}
+                className="flex items-center gap-1.5 bg-pink-50 rounded-full px-3 py-1.5 text-sm text-foreground"
               >
                 <span>{emotionEmoji[ci.emotion] ?? "💭"}</span>
                 <span className="capitalize">{ci.emotion}</span>
@@ -107,10 +160,10 @@ export function DashboardPage() {
         <Button
           data-ocid="dashboard.checkin_button"
           onClick={() => navigate({ to: "/prompts" })}
-          className="w-full mt-4 bg-pink-400 hover:bg-pink-500 text-white rounded-xl"
+          className="w-full mt-4 bg-pink-400 hover:bg-pink-500 text-white rounded-2xl shadow-glow"
           size="sm"
         >
-          Check in today
+          Check in today ✨
         </Button>
       </div>
     </div>

@@ -1,0 +1,118 @@
+@import url("https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,600&family=Figtree:wght@300;400;500;600;700&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 99.5%;
+    --foreground: 345 15% 15%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 345 15% 15%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 345 15% 15%;
+
+    --primary: 345 70% 65%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 345 40% 95%;
+    --secondary-foreground: 345 40% 35%;
+
+    --muted: 345 20% 96%;
+    --muted-foreground: 345 10% 55%;
+
+    --accent: 345 50% 92%;
+    --accent-foreground: 345 60% 40%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 345 30% 90%;
+    --input: 345 30% 90%;
+    --ring: 345 70% 65%;
+
+    --radius: 0.75rem;
+
+    /* OKLCH tokens */
+    --rose-50: oklch(0.98 0.01 10);
+    --rose-100: oklch(0.95 0.03 10);
+    --rose-200: oklch(0.9 0.06 10);
+    --rose-300: oklch(0.82 0.1 10);
+    --rose-400: oklch(0.72 0.16 10);
+    --rose-500: oklch(0.62 0.2 10);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: "Figtree", sans-serif;
+  }
+  h1,
+  h2,
+  h3 {
+    font-family: "Playfair Display", serif;
+  }
+}
+
+/* Smooth page transitions */
+@keyframes fadeSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.page-enter {
+  animation: fadeSlideUp 0.3s ease-out forwards;
+}
+
+/* Floating hearts animation */
+@keyframes floatHeart {
+  0% {
+    transform: translateY(0) scale(1);
+    opacity: 0.6;
+  }
+  50% {
+    transform: translateY(-20px) scale(1.1);
+    opacity: 0.8;
+  }
+  100% {
+    transform: translateY(0) scale(1);
+    opacity: 0.6;
+  }
+}
+
+.float-heart {
+  animation: floatHeart 3s ease-in-out infinite;
+}
+
+/* Confetti-like burst */
+@keyframes burst {
+  0% {
+    transform: scale(0) rotate(0deg);
+    opacity: 1;
+  }
+  80% {
+    transform: scale(1.3) rotate(15deg);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+    opacity: 1;
+  }
+}
+
+.burst-in {
+  animation: burst 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
