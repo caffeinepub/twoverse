@@ -2,54 +2,39 @@ import { useEffect, useState } from "react";
 import type { backendInterface } from "../backend";
 import { createActorWithConfig } from "../config";
 
-// Module-level cache so actor is shared across all components and created only once
-let _actor: backendInterface | null = null;
-let _promise: Promise<backendInterface> | null = null;
-const _listeners: Set<(a: backendInterface) => void> = new Set();
+let cachedActor: backendInterface | null = null;
+let actorPromise: Promise<backendInterface> | null = null;
 
-function getOrCreateActor(): Promise<backendInterface> {
-  if (_actor) return Promise.resolve(_actor);
-  if (_promise) return _promise;
-  _promise = createActorWithConfig()
-    .then((a) => {
-      _actor = a;
-      for (const fn of _listeners) {
-        fn(a);
-      }
-      _listeners.clear();
-      return a;
-    })
-    .catch((err) => {
-      _promise = null; // allow retry
-      throw err;
-    });
-  return _promise;
+async function getOrCreateActor(): Promise<backendInterface> {
+  if (cachedActor) return cachedActor;
+  if (actorPromise) return actorPromise;
+  actorPromise = createActorWithConfig().then((actor) => {
+    cachedActor = actor;
+    return actor;
+  });
+  return actorPromise;
 }
 
 export function useActor() {
-  const [actor, setActor] = useState<backendInterface | null>(_actor);
-  const [isFetching, setIsFetching] = useState(!_actor);
+  const [actor, setActor] = useState<backendInterface | null>(cachedActor);
+  const [isFetching, setIsFetching] = useState(!cachedActor);
 
   useEffect(() => {
-    if (_actor) {
-      setActor(_actor);
+    if (cachedActor) {
+      setActor(cachedActor);
       setIsFetching(false);
       return;
     }
     setIsFetching(true);
-    const listener = (a: backendInterface) => {
-      setActor(a);
-      setIsFetching(false);
-    };
-    _listeners.add(listener);
-    getOrCreateActor().catch((err) => {
-      console.error("Failed to create backend actor:", err);
-      setIsFetching(false);
-      _listeners.delete(listener);
-    });
-    return () => {
-      _listeners.delete(listener);
-    };
+    getOrCreateActor()
+      .then((a) => {
+        setActor(a);
+        setIsFetching(false);
+      })
+      .catch((err) => {
+        console.error("Failed to create actor:", err);
+        setIsFetching(false);
+      });
   }, []);
 
   return { actor, isFetching };
